@@ -44,6 +44,8 @@ DEFAULT_SETTINGS = {
     "phone_access": "0",
     "phone_pin": "",
     "secret_key": "",
+    "last_modified_at": "",
+    "last_exported_at": "",
 }
 
 SCHEMA = """
@@ -144,10 +146,38 @@ def get_settings():
 
 
 def save_settings(values):
+    now = datetime.now().isoformat()
+    meta_only = set(values.keys()).issubset({"last_modified_at", "last_exported_at"})
     with connect() as conn:
         for key, value in values.items():
             conn.execute("INSERT INTO settings(key, value) VALUES (?, ?) "
                          "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+        if not meta_only:
+            conn.execute("INSERT INTO settings(key, value) VALUES ('last_modified_at', ?) "
+                         "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (now,))
+
+
+def touch_modified(conn=None):
+    now = datetime.now().isoformat()
+    if conn is not None:
+        conn.execute("INSERT INTO settings(key, value) VALUES ('last_modified_at', ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (now,))
+    else:
+        save_settings({"last_modified_at": now})
+
+
+def mark_exported():
+    now = datetime.now().isoformat()
+    save_settings({"last_exported_at": now})
+
+
+def needs_export(settings=None):
+    settings = settings or get_settings()
+    mod = (settings.get("last_modified_at") or "").strip()
+    exp = (settings.get("last_exported_at") or "").strip()
+    if not mod:
+        return False
+    return (not exp) or (mod > exp)
 
 
 def default_verifiers(settings=None):
@@ -316,6 +346,7 @@ def upsert_day(original_date, values):
                          (values["date"], values["morning_in"], values["morning_out"],
                           values["afternoon_in"], values["afternoon_out"],
                           json.dumps(values["verifiers"]), values.get("notes", ""), now, row["id"]))
+            touch_modified(conn)
             return row["id"]
         cur = conn.execute("""INSERT INTO days(date, morning_in, morning_out, afternoon_in,
                               afternoon_out, verifiers, notes, updated_at)
@@ -323,6 +354,7 @@ def upsert_day(original_date, values):
                            (values["date"], values["morning_in"], values["morning_out"],
                             values["afternoon_in"], values["afternoon_out"],
                             json.dumps(values["verifiers"]), values.get("notes", ""), now))
+        touch_modified(conn)
         return cur.lastrowid
 
 
@@ -390,6 +422,7 @@ def delete_day(date_str):
         files = [p["filename"] for p in conn.execute("SELECT filename FROM photos WHERE day_id = ?",
                                                      (row["id"],))]
         conn.execute("DELETE FROM days WHERE id = ?", (row["id"],))
+        touch_modified(conn)
     return files
 
 
@@ -422,6 +455,7 @@ def save_week_data(number, data):
         conn.execute("INSERT INTO weeks(number, data) VALUES (?, ?) "
                      "ON CONFLICT(number) DO UPDATE SET data = excluded.data",
                      (number, json.dumps(data)))
+        touch_modified(conn)
 
 
 def is_week_locked(number):

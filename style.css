@@ -63,6 +63,13 @@ a { color: var(--green-700); }
 .sidebar-foot { margin-top: auto; padding: 12px; border-top: 1px solid rgba(255, 255, 255, .12); }
 .sidebar-foot small { display: block; }
 .muted-light { opacity: .6; }
+.sidebar-actions { display: grid; gap: 6px; margin-top: 10px; }
+.btn-sidebar { background: rgba(255, 255, 255, .12); color: #fff; border-color: rgba(255, 255, 255, .18); width: 100%; }
+.btn-sidebar:hover { background: rgba(255, 255, 255, .2); }
+.btn-save-alert { background: var(--gold); color: var(--green-900); width: 100%; font-weight: 700; }
+.btn-save-alert:hover { filter: brightness(1.06); }
+.import-hero { border-style: dashed; border-width: 1.5px; border-color: #9ec5ae; background: linear-gradient(135deg, #fff 0%, var(--green-50) 100%); }
+.save-reminder { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 /* ---------- main ---------- */
 .main { flex: 1; padding: 28px 34px 110px; max-width: 1180px; min-width: 0; }

@@ -697,3 +697,57 @@ function initSettingsPage() {
     setBusy(btn, false);
   });
 }
+
+// ------------------------------------------------ portable database import
+function initRestoreForms() {
+  const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB chunks (safe under Vercel's 4.5 MB limit)
+  $all('form[data-restore-form]').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      const input = $('input[type=file]', form);
+      const file = input && input.files && input.files[0];
+      if (!file) return;
+      const msg = form.dataset.confirm;
+      if (msg && !confirm(msg)) {
+        e.preventDefault();
+        return;
+      }
+      // Files <= 3 MB can use the standard fast form POST directly
+      if (file.size <= 3 * 1024 * 1024) return;
+
+      e.preventDefault();
+      const btn = $('button[type=submit]', form);
+      const total = Math.ceil(file.size / CHUNK_SIZE);
+      const uploadId = 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+      setBusy(btn, true, 'Uploading 0%...');
+      try {
+        let lastRes = null;
+        for (let i = 0; i < total; i++) {
+          const slice = file.slice(i * CHUNK_SIZE, Math.min(file.size, (i + 1) * CHUNK_SIZE));
+          const fd = new FormData();
+          fd.append('upload_id', uploadId);
+          fd.append('filename', file.name);
+          fd.append('index', String(i));
+          fd.append('total', String(total));
+          fd.append('chunk', slice, file.name);
+          const pct = Math.round(((i + 1) / total) * 100);
+          btn.innerHTML = '<span class="spinner"></span> ' + (i + 1 < total ? 'Uploading ' + pct + '%...' : 'Restoring...');
+          const res = await fetch('/api/restore-chunk', { method: 'POST', body: fd });
+          let data = {};
+          try { data = await res.json(); } catch (err) { /* ignore */ }
+          if (!res.ok) throw new Error(data.error || 'Import failed. Please try again.');
+          lastRes = data;
+        }
+        if (lastRes && lastRes.redirect) {
+          location.href = lastRes.redirect;
+        } else {
+          location.reload();
+        }
+      } catch (err) {
+        toast(err.message, 'error');
+        setBusy(btn, false);
+      }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initRestoreForms);

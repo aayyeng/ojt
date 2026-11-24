@@ -9,6 +9,28 @@
   <a class="btn btn-primary" href="{{ url_for('entry_today') }}">＋ {{ 'Edit today\'s entry' if today_entry else 'Add today\'s entry' }}</a>
 </header>
 
+{% if stats.days|length == 0 %}
+  <section class="card import-hero">
+    <div class="card-head">
+      <h2>📂 No local OJT database on this device yet</h2>
+      <span class="pill pill-gold">Load or Start Fresh</span>
+    </div>
+    <p class="muted small">Already logged OJT entries on another device? Import your saved <strong>.zip</strong> (database + photos) or <strong>.db</strong> file right here — or click <strong>＋ Add today's entry</strong> above to start a brand-new database.</p>
+    <form method="post" action="{{ url_for('restore') }}" enctype="multipart/form-data" class="workflow-bar" data-restore-form>
+      <input type="file" name="backup_zip" accept=".zip,.db,.sqlite,.sqlite3,application/zip" required>
+      <button type="submit" class="btn btn-primary">⬆ Import Database (.zip / .db)</button>
+    </form>
+  </section>
+{% elif needs_export and is_cloud %}
+  <div class="notice notice-warn save-reminder">
+    <span><strong>You have new changes not yet saved to a file.</strong> Download a copy before closing this browser session.</span>
+    <span class="head-actions">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('backup_db') }}">⬇ Save .db</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('backup') }}">⬇ Save Full (.zip)</a>
+    </span>
+  </div>
+{% endif %}
+
 {% if today < stats.start %}
   <div class="notice">Your OJT starts on <strong>{{ long_date(stats.start) }}</strong>
     ({{ (stats.start - today).days }} day{{ 's' if (stats.start - today).days != 1 }} to go). You can already set up your details in <a href="{{ url_for('settings_page') }}">Settings</a>.</div>

@@ -39,11 +39,16 @@
     <div class="sidebar-foot">
       <small>{{ settings.student_name }}</small>
       <small class="muted-light">Required: {{ settings.required_hours }} hours</small>
-      {% if is_cloud %}
-        <form method="post" action="{{ url_for('logout') }}" style="margin-top:8px;">
-          <button type="submit" class="btn btn-ghost btn-sm" style="width:100%;">Lock / Log out</button>
-        </form>
-      {% endif %}
+      <div class="sidebar-actions">
+        <a href="{{ url_for('backup') }}" class="btn btn-sm {{ 'btn-save-alert' if needs_export else 'btn-sidebar' }}" title="Download full backup (.zip with database + photos)">
+          {{ '● Save Data (.zip)' if needs_export else '⬇ Save Data (.zip)' }}
+        </a>
+        {% if is_cloud %}
+          <form method="post" action="{{ url_for('logout') }}">
+            <button type="submit" class="btn btn-sidebar btn-sm" style="width:100%;">🔒 Lock / Log out</button>
+          </form>
+        {% endif %}
+      </div>
     </div>
   </aside>
 
@@ -58,8 +63,8 @@
 
   <main class="main">
     {% if is_vercel %}
-      <div class="flash flash-error" style="margin-bottom:14px;">
-        <strong>Temporary storage warning (Vercel):</strong> Vercel wipes local files on restart. Use <strong>PythonAnywhere</strong> (see <code>DEPLOY_PYTHONANYWHERE.md</code>) for permanent storage of your entries and photos.
+      <div class="notice notice-warn" style="margin-bottom:14px;">
+        <strong>Portable mode (Vercel):</strong> This host resets temporary storage when idle. Import your <code>.zip</code> / <code>.db</code> file to resume, and click <strong>Save Data</strong> before leaving so your latest entries stay safe.
       </div>
     {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}

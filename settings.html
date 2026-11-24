@@ -136,12 +136,18 @@
 </form>
 
 <section class="card" style="margin-top:18px;">
-  <div class="card-head"><h2>📦 Restore from backup</h2></div>
-  <p class="muted small">Moving from your laptop to PythonAnywhere (or restoring an older backup)? Download a <strong>Backup (.zip)</strong> on your laptop first, then upload it here to import all entries, photos, NCIS screenshots, and settings.</p>
-  <form method="post" action="{{ url_for('restore') }}" enctype="multipart/form-data" class="workflow-bar"
-        onsubmit="return confirm('Restore this backup? Current data on this server will be replaced.');">
-    <input type="file" name="backup_zip" accept=".zip,application/zip" required>
-    <button type="submit" class="btn btn-ghost">⬆ Restore backup (.zip)</button>
+  <div class="card-head">
+    <h2>📦 Portable database (Save &amp; Import)</h2>
+    <span class="pill {{ 'pill-gold' if needs_export else 'pill-green' }}">{{ 'New changes to save' if needs_export else 'Up to date' }}</span>
+  </div>
+  <p class="muted small">Save your database to move between devices (laptop, phone, or cloud) or load an existing <strong>.zip</strong> (full backup with photos) or <strong>.db</strong> (database only, tiny ~50 KB) file.</p>
+  <div class="head-actions" style="margin-bottom:14px;">
+    <a class="btn btn-primary btn-sm" href="{{ url_for('backup') }}">⬇ Save Full Backup (.zip — DB + photos)</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('backup_db') }}">⬇ Save Database Only (.db — fast)</a>
+  </div>
+  <form method="post" action="{{ url_for('restore') }}" enctype="multipart/form-data" class="workflow-bar" data-restore-form data-confirm="Import this database? Current data on this device will be replaced.">
+    <input type="file" name="backup_zip" accept=".zip,.db,.sqlite,.sqlite3,application/zip" required>
+    <button type="submit" class="btn btn-ghost">⬆ Import Database (.zip / .db)</button>
   </form>
 </section>
 {% endblock %}

@@ -188,6 +188,7 @@ def inject_globals():
         "nav_week": nav_week,
         "is_cloud": IS_CLOUD,
         "is_vercel": IS_VERCEL,
+        "needs_export": db.needs_export(settings),
     }
 
 
@@ -698,32 +699,42 @@ def settings_page():
                            heic_ok=HEIC_OK, is_local=is_local_request())
 
 
-@app.route("/backup")
-def backup():
-    out = io.BytesIO()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in os.walk(db.DATA_DIR):
-            for f in files:
-                full = os.path.join(root, f)
-                rel = os.path.relpath(full, db.DATA_DIR)
-                zf.write(full, os.path.join("data", rel))
-    out.seek(0)
-    return send_file(out, mimetype="application/zip", as_attachment=True,
-                     download_name=f"ojt_journal_backup_{date.today().isoformat()}.zip")
-
-
-@app.route("/restore", methods=["POST"])
-def restore():
-    f = request.files.get("backup_zip")
-    if not f or not f.filename:
-        flash("Please choose a backup .zip file first.", "error")
-        return redirect(url_for("settings_page"))
+def _validate_sqlite_file(path):
+    """Verify path is a valid OJT Journal SQLite database."""
+    conn = sqlite3.connect(path)
     try:
-        raw = f.read()
-        zf = zipfile.ZipFile(io.BytesIO(raw))
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    finally:
+        conn.close()
+    if not {"settings", "days"}.issubset(tables):
+        raise ValueError("Missing required OJT Journal tables (settings, days).")
+
+
+def _restore_from_bytes(raw_bytes, filename=""):
+    """Restore from either a full backup .zip (DB + photos) or a standalone .db SQLite file."""
+    lower = (filename or "").lower()
+    is_sqlite = raw_bytes[:16] == b"SQLite format 3\x00" or lower.endswith((".db", ".sqlite", ".sqlite3"))
+
+    if is_sqlite and not raw_bytes[:2] == b"PK":
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_db = os.path.join(tmp, "check.db")
+            with open(tmp_db, "wb") as out_f:
+                out_f.write(raw_bytes)
+            try:
+                _validate_sqlite_file(tmp_db)
+            except Exception:
+                raise ValueError("That .db file is not a valid OJT Journal database.")
+            os.makedirs(db.UPLOAD_DIR, exist_ok=True)
+            shutil.copy2(tmp_db, db.DB_PATH)
+        db.init_db()
+        db.mark_exported()
+        days_count = len(db.list_days())
+        return f"Database imported! ({days_count} day{'s' if days_count != 1 else ''} loaded — photos were not included in .db-only file.)"
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw_bytes))
     except zipfile.BadZipFile:
-        flash("That file is not a valid ZIP archive.", "error")
-        return redirect(url_for("settings_page"))
+        raise ValueError("Please upload a valid OJT backup (.zip) or SQLite database (.db) file.")
 
     with zf:
         names = [n.replace("\\", "/") for n in zf.namelist()]
@@ -733,24 +744,16 @@ def restore():
                 db_member = orig
                 break
         if not db_member:
-            flash("Backup ZIP does not contain ojt_journal.db.", "error")
-            return redirect(url_for("settings_page"))
+            raise ValueError("Backup ZIP does not contain ojt_journal.db.")
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_db = os.path.join(tmp, "check.db")
             with open(tmp_db, "wb") as out_f:
                 out_f.write(zf.read(db_member))
             try:
-                conn = sqlite3.connect(tmp_db)
-                try:
-                    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                finally:
-                    conn.close()
-                if not {"settings", "days"}.issubset(tables):
-                    raise ValueError("Missing required tables")
+                _validate_sqlite_file(tmp_db)
             except Exception:
-                flash("The ojt_journal.db inside this ZIP is corrupted or invalid.", "error")
-                return redirect(url_for("settings_page"))
+                raise ValueError("The ojt_journal.db inside this ZIP is corrupted or invalid.")
 
             os.makedirs(db.UPLOAD_DIR, exist_ok=True)
             shutil.copy2(tmp_db, db.DB_PATH)
@@ -774,11 +777,98 @@ def restore():
                 restored_files += 1
 
     db.init_db()
+    db.mark_exported()
+    days_count = len(db.list_days())
+    return (f"Backup imported! ({days_count} day{'s' if days_count != 1 else ''} and "
+            f"{restored_files} photo{'s' if restored_files != 1 else ''} loaded.)")
+
+
+@app.route("/backup")
+def backup():
+    db.mark_exported()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(db.DATA_DIR):
+            for f in files:
+                if f.endswith(".zip"):
+                    continue
+                full = os.path.join(root, f)
+                rel = os.path.relpath(full, db.DATA_DIR)
+                zf.write(full, os.path.join("data", rel))
+    out.seek(0)
+    return send_file(out, mimetype="application/zip", as_attachment=True,
+                     download_name=f"ojt_journal_backup_{date.today().isoformat()}.zip")
+
+
+@app.route("/backup/db")
+def backup_db():
+    db.mark_exported()
+    if not os.path.isfile(db.DB_PATH):
+        db.init_db()
+    with open(db.DB_PATH, "rb") as f:
+        payload = f.read()
+    return send_file(io.BytesIO(payload), mimetype="application/x-sqlite3", as_attachment=True,
+                     download_name=f"ojt_journal_{date.today().isoformat()}.db")
+
+
+@app.route("/restore", methods=["POST"])
+def restore():
+    f = request.files.get("backup_zip")
+    if not f or not f.filename:
+        flash("Please choose a backup (.zip) or database (.db) file first.", "error")
+        return redirect(request.referrer or url_for("settings_page"))
+    try:
+        msg = _restore_from_bytes(f.read(), f.filename)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(request.referrer or url_for("settings_page"))
     if IS_CLOUD:
         session.permanent = True
         session["phone_ok"] = True
-    flash(f"Backup restored! ({restored_files} uploaded photo{'s' if restored_files != 1 else ''} restored.)", "success")
+    flash(msg, "success")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/api/restore-chunk", methods=["POST"])
+def api_restore_chunk():
+    """Chunked upload endpoint so large photo backup ZIPs (>4 MB) import smoothly."""
+    upload_id = re.sub(r"[^a-zA-Z0-9_-]", "", request.form.get("upload_id") or "")
+    filename = request.form.get("filename") or "backup.zip"
+    try:
+        index = int(request.form.get("index", 0))
+        total = int(request.form.get("total", 1))
+    except ValueError:
+        return jsonify(error="Invalid chunk metadata."), 400
+    chunk = request.files.get("chunk")
+    if not upload_id or not chunk or total < 1 or index < 0 or index >= total:
+        return jsonify(error="Invalid chunk upload."), 400
+
+    chunk_dir = os.path.join(tempfile.gettempdir(), "ojt_restore_chunks")
+    os.makedirs(chunk_dir, exist_ok=True)
+    part_path = os.path.join(chunk_dir, f"{upload_id}.part")
+    mode = "wb" if index == 0 else "ab"
+    with open(part_path, mode) as out_f:
+        out_f.write(chunk.read())
+
+    if index + 1 < total:
+        return jsonify(ok=True, done=False, received=index + 1, total=total)
+
+    try:
+        with open(part_path, "rb") as f:
+            raw = f.read()
+        msg = _restore_from_bytes(raw, filename)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    finally:
+        try:
+            os.remove(part_path)
+        except OSError:
+            pass
+    if IS_CLOUD:
+        session.permanent = True
+        session["phone_ok"] = True
+    flash(msg, "success")
+    return jsonify(ok=True, done=True, message=msg, redirect=url_for("dashboard"))
 
 
 # --------------------------------------------------------------------------
