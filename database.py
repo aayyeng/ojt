@@ -1,13 +1,20 @@
 """SQLite storage for the OJT Journal."""
+from contextlib import contextmanager
 import json
 import os
 import sqlite3
+import tempfile
 from datetime import date, datetime, timedelta
 
 import rules
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+if os.environ.get("OJT_DATA_DIR"):
+    DATA_DIR = os.path.abspath(os.environ["OJT_DATA_DIR"])
+elif os.environ.get("VERCEL"):
+    DATA_DIR = os.path.join(tempfile.gettempdir(), "ojt_journal_data")
+else:
+    DATA_DIR = os.path.join(BASE_DIR, "data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 DB_PATH = os.path.join(DATA_DIR, "ojt_journal.db")
 
@@ -99,12 +106,17 @@ WEEK_FIELDS = [
 ]
 
 
+@contextmanager
 def connect():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db():
@@ -126,6 +138,8 @@ def get_settings():
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
     data = dict(DEFAULT_SETTINGS)
     data.update({r["key"]: r["value"] for r in rows})
+    if not data.get("groq_api_key") and os.environ.get("OJT_GROQ_API_KEY"):
+        data["groq_api_key"] = os.environ["OJT_GROQ_API_KEY"].strip()
     return data
 
 

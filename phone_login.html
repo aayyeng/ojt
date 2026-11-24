@@ -18,6 +18,16 @@
     {% if blocked %}
       <p class="muted">Phone access is turned off.</p>
       <p class="small muted">On your laptop, open <strong>Settings → Phone access</strong>, set a PIN and turn it on.</p>
+    {% elif setup_mode %}
+      <p class="muted">First-time setup: create a 4–8 digit PIN to protect your OJT Journal online.</p>
+      {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+      <form method="post">
+        <input type="password" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+               placeholder="New PIN (4–8 digits)" autofocus required class="pin-input">
+        <input type="password" name="pin_confirm" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+               placeholder="Confirm PIN" required class="pin-input">
+        <button class="btn btn-primary" type="submit">Save PIN &amp; Open</button>
+      </form>
     {% else %}
       <p class="muted">Enter your PIN to continue.</p>
       {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}

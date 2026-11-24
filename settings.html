@@ -94,29 +94,39 @@
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>📱 Phone access</h2>
-      <span class="pill {{ 'pill-green' if settings.phone_access == '1' else '' }}">{{ 'On' if settings.phone_access == '1' else 'Off' }}</span></div>
-    <p class="muted small">Open the system on your iPhone so you can take or pick photos right from your phone.
-      Your phone and laptop must be on the <strong>same WiFi</strong> (or connect the laptop to your iPhone's hotspot).
-      The laptop must be on with this system running.</p>
-    <div class="phone-grid">
-      <div class="form-grid">
-        <label class="check"><input type="checkbox" name="phone_access" {{ 'checked' if settings.phone_access == '1' }}> Allow my phone to open the system</label>
-        <label>PIN for the phone (4–8 digits)
+    <div class="card-head"><h2>{{ '🔒 Cloud login PIN' if is_cloud else '📱 Phone access' }}</h2>
+      <span class="pill {{ 'pill-green' if is_cloud or settings.phone_access == '1' else '' }}">{{ 'Required' if is_cloud else ('On' if settings.phone_access == '1' else 'Off') }}</span></div>
+    {% if is_cloud %}
+      <p class="muted small">Your OJT Journal is running online, so a PIN is always required to sign in from any browser or phone.</p>
+      <div class="form-grid two">
+        <label>Change login PIN (4–8 digits)
           <input type="password" name="phone_pin" inputmode="numeric" maxlength="8"
-                 placeholder="{{ '•••• (leave blank to keep the saved PIN)' if settings.phone_pin else 'e.g. 4821' }}"></label>
-        {% if phone_url %}
-          <p class="small">Address for your phone: <strong>{{ phone_url }}</strong></p>
-        {% else %}
-          <p class="small muted">Connect the laptop to WiFi to get the phone address.</p>
-        {% endif %}
-        <p class="small muted">The first time, Windows may ask to allow Python on the network. Tick <strong>Private networks</strong> and click <strong>Allow</strong>.
-          {% if not heic_ok %}If iPhone photos fail to upload, set your iPhone camera to <strong>Most Compatible</strong> (Settings → Camera → Formats).{% endif %}</p>
+                 placeholder="•••• (leave blank to keep current PIN)"></label>
+        <input type="hidden" name="phone_access" value="1">
       </div>
-      {% if phone_qr and settings.phone_access == '1' %}
-        <figure class="qr"><img src="{{ phone_qr }}" alt="QR code"><figcaption>Scan with your iPhone camera</figcaption></figure>
-      {% endif %}
-    </div>
+    {% else %}
+      <p class="muted small">Open the system on your iPhone so you can take or pick photos right from your phone.
+        Your phone and laptop must be on the <strong>same WiFi</strong> (or connect the laptop to your iPhone's hotspot).
+        The laptop must be on with this system running.</p>
+      <div class="phone-grid">
+        <div class="form-grid">
+          <label class="check"><input type="checkbox" name="phone_access" {{ 'checked' if settings.phone_access == '1' }}> Allow my phone to open the system</label>
+          <label>PIN for the phone (4–8 digits)
+            <input type="password" name="phone_pin" inputmode="numeric" maxlength="8"
+                   placeholder="{{ '•••• (leave blank to keep the saved PIN)' if settings.phone_pin else 'e.g. 4821' }}"></label>
+          {% if phone_url %}
+            <p class="small">Address for your phone: <strong>{{ phone_url }}</strong></p>
+          {% else %}
+            <p class="small muted">Connect the laptop to WiFi to get the phone address.</p>
+          {% endif %}
+          <p class="small muted">The first time, Windows may ask to allow Python on the network. Tick <strong>Private networks</strong> and click <strong>Allow</strong>.
+            {% if not heic_ok %}If iPhone photos fail to upload, set your iPhone camera to <strong>Most Compatible</strong> (Settings → Camera → Formats).{% endif %}</p>
+        </div>
+        {% if phone_qr and settings.phone_access == '1' %}
+          <figure class="qr"><img src="{{ phone_qr }}" alt="QR code"><figcaption>Scan with your iPhone camera</figcaption></figure>
+        {% endif %}
+      </div>
+    {% endif %}
   </section>
 
   <div class="save-bar">
@@ -124,6 +134,16 @@
     <button type="submit" class="btn btn-primary">💾 Save settings</button>
   </div>
 </form>
+
+<section class="card" style="margin-top:18px;">
+  <div class="card-head"><h2>📦 Restore from backup</h2></div>
+  <p class="muted small">Moving from your laptop to PythonAnywhere (or restoring an older backup)? Download a <strong>Backup (.zip)</strong> on your laptop first, then upload it here to import all entries, photos, NCIS screenshots, and settings.</p>
+  <form method="post" action="{{ url_for('restore') }}" enctype="multipart/form-data" class="workflow-bar"
+        onsubmit="return confirm('Restore this backup? Current data on this server will be replaced.');">
+    <input type="file" name="backup_zip" accept=".zip,application/zip" required>
+    <button type="submit" class="btn btn-ghost">⬆ Restore backup (.zip)</button>
+  </form>
+</section>
 {% endblock %}
 
 {% block scripts %}<script>window.SAVED_VERIFIERS = {{ saved_verifiers|tojson }}; initSettingsPage();</script>{% endblock %}

@@ -67,6 +67,11 @@ def chat_json(settings, system, user):
     for mdl, json_mode, extras in attempts:
         try:
             r = _post(api_key, mdl, messages, json_mode, extras)
+        except requests.exceptions.ProxyError:
+            raise AIError(
+                "Outbound request to api.groq.com was blocked by the host proxy "
+                "(PythonAnywhere Free accounts restrict external APIs — request api.groq.com on PythonAnywhere's allowlist)."
+            )
         except requests.exceptions.ConnectionError:
             raise AIError("Cannot reach Groq. Please check your internet connection.")
         except requests.exceptions.Timeout:

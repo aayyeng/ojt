@@ -8,7 +8,10 @@ import math
 import os
 import re
 import secrets
+import shutil
 import socket
+import sqlite3
+import tempfile
 import threading
 import time
 import uuid
@@ -19,6 +22,7 @@ from datetime import date, datetime, timedelta
 from flask import (Flask, abort, flash, jsonify, redirect, render_template, request,
                    send_file, send_from_directory, session, url_for)
 from PIL import Image, ImageOps
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 try:  # iPhone HEIC photos (optional)
     from pillow_heif import register_heif_opener
@@ -38,16 +42,27 @@ ASSETS = {"style.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-5
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic", ".heif"}
 LOCAL_ADDRS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 PORT = 5000
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+IS_CLOUD = bool(
+    os.environ.get("PYTHONANYWHERE_DOMAIN")
+    or os.environ.get("PYTHONANYWHERE_SITE")
+    or os.environ.get("OJT_CLOUD") == "1"
+    or IS_VERCEL
+)
 
 app = Flask(__name__, template_folder=BASE_DIR, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
 app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if IS_CLOUD:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 db.init_db()
-app.secret_key = db.get_settings()["secret_key"]
+app.secret_key = os.environ.get("OJT_SECRET_KEY") or db.get_settings()["secret_key"]
 
 
 # --------------------------------------------------------------------------
-# Phone access (same WiFi) with PIN
+# Phone / Cloud access with PIN
 # --------------------------------------------------------------------------
 def lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -61,16 +76,33 @@ def lan_ip():
 
 
 def is_local_request():
+    if IS_CLOUD:
+        return False
     return request.remote_addr in LOCAL_ADDRS
+
+
+def active_pin(settings=None):
+    env_pin = (os.environ.get("OJT_PIN") or "").strip()
+    if env_pin:
+        return env_pin
+    settings = settings or db.get_settings()
+    return (settings.get("phone_pin") or "").strip()
 
 
 @app.before_request
 def phone_guard():
-    if is_local_request() or request.endpoint in ("assets", "phone_login"):
+    if is_local_request() or request.endpoint in ("assets", "phone_login", "logout"):
         return None
     settings = db.get_settings()
-    if settings.get("phone_access") != "1" or not settings.get("phone_pin"):
-        return render_template("phone_login.html", blocked=True), 403
+    pin = active_pin(settings)
+    if IS_CLOUD:
+        if not pin:
+            return redirect(url_for("phone_login"))
+        if not session.get("phone_ok"):
+            return redirect(url_for("phone_login", next=request.full_path))
+        return None
+    if settings.get("phone_access") != "1" or not pin:
+        return render_template("phone_login.html", blocked=True, setup_mode=False), 403
     if not session.get("phone_ok"):
         return redirect(url_for("phone_login", next=request.full_path))
     return None
@@ -79,20 +111,42 @@ def phone_guard():
 @app.route("/phone-login", methods=["GET", "POST"])
 def phone_login():
     settings = db.get_settings()
-    blocked = settings.get("phone_access") != "1" or not settings.get("phone_pin")
+    pin_saved = active_pin(settings)
+    setup_mode = IS_CLOUD and not pin_saved
+    blocked = (not IS_CLOUD) and (settings.get("phone_access") != "1" or not pin_saved)
     if blocked and not is_local_request():
-        return render_template("phone_login.html", blocked=True), 403
+        return render_template("phone_login.html", blocked=True, setup_mode=False), 403
     error = None
     if request.method == "POST":
-        pin = request.form.get("pin", "").strip()
-        if secrets.compare_digest(pin, settings.get("phone_pin", "")):
-            session.permanent = True
-            session["phone_ok"] = True
-            nxt = request.args.get("next") or "/"
-            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/")
-        time.sleep(1)
-        error = "Wrong PIN. Try again."
-    return render_template("phone_login.html", blocked=False, error=error)
+        if setup_mode:
+            new_pin = request.form.get("pin", "").strip()
+            confirm = request.form.get("pin_confirm", "").strip()
+            if not new_pin.isdigit() or not 4 <= len(new_pin) <= 8:
+                error = "PIN must be 4 to 8 digits."
+            elif new_pin != confirm:
+                error = "PINs do not match. Try again."
+            else:
+                db.save_settings({"phone_pin": new_pin, "phone_access": "1"})
+                session.permanent = True
+                session["phone_ok"] = True
+                flash("PIN set! Your OJT Journal is now protected.", "success")
+                return redirect(url_for("dashboard"))
+        else:
+            pin = request.form.get("pin", "").strip()
+            if pin_saved and secrets.compare_digest(pin, pin_saved):
+                session.permanent = True
+                session["phone_ok"] = True
+                nxt = request.args.get("next") or "/"
+                return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/")
+            time.sleep(1)
+            error = "Wrong PIN. Try again."
+    return render_template("phone_login.html", blocked=False, setup_mode=setup_mode, error=error)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("phone_login"))
 
 
 def phone_qr_data_uri(url):
@@ -128,7 +182,13 @@ def inject_globals():
     nav_week = 1
     if date.today() >= db.start_date(settings):
         nav_week = db.week_number(date.today(), settings)
-    return {"settings": settings, "today": date.today(), "nav_week": nav_week}
+    return {
+        "settings": settings,
+        "today": date.today(),
+        "nav_week": nav_week,
+        "is_cloud": IS_CLOUD,
+        "is_vercel": IS_VERCEL,
+    }
 
 
 def lines(text):
@@ -645,10 +705,80 @@ def backup():
         for root, _, files in os.walk(db.DATA_DIR):
             for f in files:
                 full = os.path.join(root, f)
-                zf.write(full, os.path.relpath(full, BASE_DIR))
+                rel = os.path.relpath(full, db.DATA_DIR)
+                zf.write(full, os.path.join("data", rel))
     out.seek(0)
     return send_file(out, mimetype="application/zip", as_attachment=True,
                      download_name=f"ojt_journal_backup_{date.today().isoformat()}.zip")
+
+
+@app.route("/restore", methods=["POST"])
+def restore():
+    f = request.files.get("backup_zip")
+    if not f or not f.filename:
+        flash("Please choose a backup .zip file first.", "error")
+        return redirect(url_for("settings_page"))
+    try:
+        raw = f.read()
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile:
+        flash("That file is not a valid ZIP archive.", "error")
+        return redirect(url_for("settings_page"))
+
+    with zf:
+        names = [n.replace("\\", "/") for n in zf.namelist()]
+        db_member = None
+        for orig, norm in zip(zf.namelist(), names):
+            if norm in ("data/ojt_journal.db", "ojt_journal.db"):
+                db_member = orig
+                break
+        if not db_member:
+            flash("Backup ZIP does not contain ojt_journal.db.", "error")
+            return redirect(url_for("settings_page"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_db = os.path.join(tmp, "check.db")
+            with open(tmp_db, "wb") as out_f:
+                out_f.write(zf.read(db_member))
+            try:
+                conn = sqlite3.connect(tmp_db)
+                try:
+                    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                finally:
+                    conn.close()
+                if not {"settings", "days"}.issubset(tables):
+                    raise ValueError("Missing required tables")
+            except Exception:
+                flash("The ojt_journal.db inside this ZIP is corrupted or invalid.", "error")
+                return redirect(url_for("settings_page"))
+
+            os.makedirs(db.UPLOAD_DIR, exist_ok=True)
+            shutil.copy2(tmp_db, db.DB_PATH)
+            restored_files = 0
+            for orig, norm in zip(zf.namelist(), names):
+                if norm.endswith("/"):
+                    continue
+                if norm.startswith("data/uploads/"):
+                    rel_up = norm[len("data/uploads/"):]
+                elif norm.startswith("uploads/"):
+                    rel_up = norm[len("uploads/"):]
+                else:
+                    continue
+                rel_up = os.path.normpath(rel_up)
+                if rel_up.startswith("..") or os.path.isabs(rel_up):
+                    continue
+                dst = os.path.join(db.UPLOAD_DIR, rel_up)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with open(dst, "wb") as out_f:
+                    out_f.write(zf.read(orig))
+                restored_files += 1
+
+    db.init_db()
+    if IS_CLOUD:
+        session.permanent = True
+        session["phone_ok"] = True
+    flash(f"Backup restored! ({restored_files} uploaded photo{'s' if restored_files != 1 else ''} restored.)", "success")
+    return redirect(url_for("dashboard"))
 
 
 # --------------------------------------------------------------------------

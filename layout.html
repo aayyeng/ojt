@@ -39,6 +39,11 @@
     <div class="sidebar-foot">
       <small>{{ settings.student_name }}</small>
       <small class="muted-light">Required: {{ settings.required_hours }} hours</small>
+      {% if is_cloud %}
+        <form method="post" action="{{ url_for('logout') }}" style="margin-top:8px;">
+          <button type="submit" class="btn btn-ghost btn-sm" style="width:100%;">Lock / Log out</button>
+        </form>
+      {% endif %}
     </div>
   </aside>
 
@@ -52,6 +57,11 @@
   </header>
 
   <main class="main">
+    {% if is_vercel %}
+      <div class="flash flash-error" style="margin-bottom:14px;">
+        <strong>Temporary storage warning (Vercel):</strong> Vercel wipes local files on restart. Use <strong>PythonAnywhere</strong> (see <code>DEPLOY_PYTHONANYWHERE.md</code>) for permanent storage of your entries and photos.
+      </div>
+    {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="flashes">
