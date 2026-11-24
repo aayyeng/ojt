@@ -7,6 +7,7 @@
     <h1>{{ nice_date(day.date_obj) }}</h1>
   </div>
   <div class="head-actions">
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('week', n=week_no) }}" title="Open Week {{ week_no }} report">Week {{ week_no }} report →</a>
     <a class="btn btn-ghost" href="{{ url_for('entry', date_str=prev_date) }}" title="Previous day">←</a>
     <a class="btn btn-ghost" href="{{ url_for('entry', date_str=next_date) }}" title="Next day">→</a>
   </div>

@@ -477,6 +477,101 @@ function initWeekPage() {
   const list = $('#training-list');
   const tpl = $('#training-template');
   const form = $('#week-form');
+  const locked = !!window.WEEK_LOCKED;
+  const badges = $all('[data-autosave-badge]');
+
+  let dirty = false;
+  let saveTimer = null;
+  let inFlight = false;
+  let queued = false;
+
+  const field = (name) => form.querySelector('[name=' + name + ']');
+  const splitLines = (v) => String(v || '').split('\n').map((x) => x.trim()).filter(Boolean);
+
+  function setStatus(state, text) {
+    badges.forEach((el) => {
+      el.textContent = text;
+      el.className = 'autosave-pill' + (state ? ' is-' + state : '');
+    });
+  }
+
+  function collectTraining() {
+    return $all('.training-card', list).map((c) => ({
+      category: $('[data-t=category]', c).value.trim(),
+      how: splitLines($('[data-t=how]', c).value),
+      trainers: splitLines($('[data-t=trainers]', c).value),
+      timeline: $('[data-t=timeline]', c).value.trim(),
+      outputs: splitLines($('[data-t=outputs]', c).value),
+    }));
+  }
+
+  function collectWeekPayload() {
+    return {
+      problems_raw: field('problems_raw').value,
+      solutions_raw: field('solutions_raw').value,
+      goals_raw: field('goals_raw').value,
+      problems: field('problems').value,
+      solutions: field('solutions').value,
+      goals: field('goals').value,
+      duties: field('duties').value,
+      new_trainings: field('new_trainings').value,
+      proposed: field('proposed').value,
+      accomplishments: field('accomplishments').value,
+      learning_activities: field('learning_activities').value,
+      learning_outcomes: field('learning_outcomes').value,
+      training: collectTraining(),
+    };
+  }
+
+  async function saveNow() {
+    if (locked) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (inFlight) {
+      queued = true;
+      return;
+    }
+    inFlight = true;
+    dirty = false;
+    setStatus('saving', 'Saving...');
+    try {
+      const res = await postJSON('/api/week/' + window.WEEK_NO + '/autosave', collectWeekPayload());
+      setStatus('saved', 'Saved ✓ ' + (res.saved_at || ''));
+    } catch (err) {
+      dirty = true;
+      setStatus('error', 'Save failed — click Save');
+    } finally {
+      inFlight = false;
+      if (queued) {
+        queued = false;
+        saveNow();
+      }
+    }
+  }
+
+  function scheduleAutosave(immediate) {
+    if (locked) return;
+    dirty = true;
+    clearTimeout(saveTimer);
+    if (immediate) {
+      saveNow();
+      return;
+    }
+    setStatus('dirty', 'Unsaved changes...');
+    saveTimer = setTimeout(saveNow, 1000);
+  }
+
+  function flushBeacon() {
+    if (locked || !dirty) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      const blob = new Blob([JSON.stringify(collectWeekPayload())], { type: 'application/json' });
+      if (navigator.sendBeacon && navigator.sendBeacon('/api/week/' + window.WEEK_NO + '/autosave', blob)) {
+        dirty = false;
+      }
+    } catch (e) { /* ignore */ }
+  }
 
   function addTraining(t) {
     t = t || {};
@@ -495,11 +590,35 @@ function initWeekPage() {
   }
 
   list.addEventListener('click', (e) => {
-    if (e.target.closest('[data-remove-training]')) e.target.closest('.training-card').remove();
+    if (e.target.closest('[data-remove-training]')) {
+      e.target.closest('.training-card').remove();
+      scheduleAutosave(true);
+    }
   });
-  $('#add-training').addEventListener('click', () => addTraining({}));
+  $('#add-training').addEventListener('click', () => {
+    addTraining({});
+    const last = list.lastElementChild;
+    if (last) $('[data-t=category]', last).focus();
+  });
 
-  const field = (name) => form.querySelector('[name=' + name + ']');
+  form.addEventListener('input', (e) => {
+    if (e.target.matches('input, textarea')) scheduleAutosave(false);
+  });
+  form.addEventListener('change', (e) => {
+    if (e.target.matches('input, textarea')) scheduleAutosave(false);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushBeacon();
+  });
+  window.addEventListener('pagehide', flushBeacon);
+  window.addEventListener('beforeunload', (e) => {
+    flushBeacon();
+    if (dirty || inFlight) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   $('#polish-reflection').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
@@ -516,7 +635,8 @@ function initWeekPage() {
       ['problems', 'solutions', 'goals'].forEach((k) => {
         if (res[k] && res[k].length) field(k).value = res[k].join('\n');
       });
-      toast('Notes polished. Review them, then save.', 'success');
+      await saveNow();
+      toast('Notes polished and auto-saved!', 'success');
     } catch (err) { toast(err.message, 'error'); }
     setBusy(btn, false);
   });
@@ -533,21 +653,16 @@ function initWeekPage() {
       });
       field('accomplishments').value = (res.accomplishments || []).join('\n\n');
       setTraining(res.training || []);
-      toast('Generated! Review everything, then Save or Download.', 'success');
+      await saveNow();
+      toast('Generated and auto-saved! Review before downloading.', 'success');
     } catch (err) { toast(err.message, 'error'); }
     setBusy(gen, false);
   });
 
   form.addEventListener('submit', () => {
-    const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
-    const items = $all('.training-card', list).map((c) => ({
-      category: $('[data-t=category]', c).value.trim(),
-      how: lines($('[data-t=how]', c).value),
-      trainers: lines($('[data-t=trainers]', c).value),
-      timeline: $('[data-t=timeline]', c).value.trim(),
-      outputs: lines($('[data-t=outputs]', c).value),
-    }));
-    $('#training_json').value = JSON.stringify(items);
+    clearTimeout(saveTimer);
+    dirty = false;
+    $('#training_json').value = JSON.stringify(collectTraining());
   });
 
   setTraining(window.WEEK_TRAINING || []);

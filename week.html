@@ -93,16 +93,20 @@
 <form method="post" id="week-form">
   <input type="hidden" name="training_json" id="training_json">
 
+  <fieldset class="week-fieldset" {{ 'disabled' if locked }}>
   <section class="card">
     <div class="card-head">
       <h2>1 · Your reflection</h2>
-      <button type="button" class="btn btn-ai" id="polish-reflection">✨ Polish my notes</button>
+      <div class="head-actions">
+        <span class="autosave-pill" data-autosave-badge>{{ 'Locked' if locked else 'Auto-save on' }}</span>
+        <button type="button" class="btn btn-ai" id="polish-reflection">✨ Polish my notes</button>
+      </div>
     </div>
-    <p class="muted small">Write short notes in your own words (Taglish is okay). These must come from you, so the AI only cleans them up.</p>
+    <p class="muted small">Add notes at the end of each day (Taglish is okay) — everything <strong>auto-saves</strong> as you type so you can come back and keep adding all week.</p>
     <div class="grid-3">
-      <label>Problems you encountered<textarea name="problems_raw" rows="4" placeholder="e.g. medyo nalito ako sa format ng inventory">{{ data.problems_raw }}</textarea></label>
-      <label>How you solved them<textarea name="solutions_raw" rows="4" placeholder="e.g. nagtanong ako kay Ma'am at humingi ng sample">{{ data.solutions_raw }}</textarea></label>
-      <label>Goals for next week<textarea name="goals_raw" rows="4" placeholder="e.g. bumilis sa pag-encode">{{ data.goals_raw }}</textarea></label>
+      <label>Problems you encountered<textarea name="problems_raw" rows="4" placeholder="e.g. Mon: nalito sa format ng liquidation&#10;Tue: kulang ang tools sa laptop">{{ data.problems_raw }}</textarea></label>
+      <label>How you solved them<textarea name="solutions_raw" rows="4" placeholder="e.g. nagtanong kay Sir Luis at humingi ng sample">{{ data.solutions_raw }}</textarea></label>
+      <label>Goals for next week<textarea name="goals_raw" rows="4" placeholder="e.g. bumilis sa pag-encode at more IT tasks">{{ data.goals_raw }}</textarea></label>
     </div>
     <div class="grid-3">
       <label>Problems <small>(final, one per line)</small><textarea name="problems" rows="4">{{ data.problems|join('\n') }}</textarea></label>
@@ -116,7 +120,7 @@
       <h2>2 · Report content</h2>
       <button type="button" class="btn btn-ai" id="generate-week" {{ 'disabled' if not days }}>✨ Generate with AI</button>
     </div>
-    <p class="muted small">AI writes these from your daily activities. Review and edit before downloading. One item per line.</p>
+    <p class="muted small">AI writes these from your daily activities, or you can add items each day yourself (changes auto-save). One item per line.</p>
     <div class="grid-2">
       <label>Duties performed this week <small>· Weekly Progress Report</small>
         <textarea name="duties" rows="7">{{ data.duties|join('\n') }}</textarea></label>
@@ -141,9 +145,13 @@
     <p class="muted small">Trainers this week: {{ trainers|join(', ') if trainers else 'none yet (add "Verified by" in your entries)' }}</p>
     <div id="training-list" class="training-list"></div>
   </section>
+  </fieldset>
 
   <div class="save-bar">
-    <div class="save-info only-desktop"><span class="muted">Download includes 6 Word files for Week {{ n }}</span></div>
+    <div class="save-info">
+      <span id="autosave-status" class="autosave-pill" data-autosave-badge>{{ 'Locked' if locked else 'Auto-save on' }}</span>
+      <span class="muted only-desktop">· 6 Word files for Week {{ n }}</span>
+    </div>
     <div class="head-actions">
       <button type="submit" name="action" value="save" class="btn btn-ghost" {{ 'disabled' if locked }}>💾 Save</button>
       <button type="submit" name="action" value="download" class="btn btn-primary" {{ 'disabled' if validation.errors }}>⬇ Download<span class="only-desktop">&nbsp;WEEK {{ n }} (.zip)</span></button>
@@ -186,6 +194,7 @@
 {% block scripts %}
 <script>
   window.WEEK_NO = {{ n }};
+  window.WEEK_LOCKED = {{ 'true' if locked else 'false' }};
   window.WEEK_TRAINING = {{ data.training|tojson }};
   initWeekPage();
 </script>

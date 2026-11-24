@@ -14,7 +14,7 @@ import time
 import uuid
 import webbrowser
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template, request,
                    send_file, send_from_directory, session, url_for)
@@ -451,6 +451,48 @@ def days():
     return render_template("days.html", weeks=weeks)
 
 
+def _apply_week_fields(data, source, is_json=False):
+    """Apply weekly report fields from form data or autosave JSON onto week dict."""
+    for key in ("problems_raw", "solutions_raw", "goals_raw"):
+        data[key] = str(source.get(key) or "")
+    for key in ("problems", "solutions", "goals", "duties", "new_trainings", "proposed",
+                "learning_activities", "learning_outcomes"):
+        raw = source.get(key)
+        data[key] = [str(x).strip() for x in raw if str(x).strip()] if isinstance(raw, list) else lines(raw)
+    acc = source.get("accomplishments")
+    if isinstance(acc, list):
+        data["accomplishments"] = [str(p).strip() for p in acc if str(p).strip()]
+    else:
+        acc_text = str(acc or "").replace("\r\n", "\n")
+        data["accomplishments"] = [p.strip() for p in re.split(r"\n\s*\n", acc_text) if p.strip()]
+    if is_json:
+        training = source.get("training") if isinstance(source.get("training"), list) else []
+    else:
+        try:
+            training = json.loads(source.get("training_json") or "[]")
+        except ValueError:
+            training = []
+    clean_training = []
+    for t in training:
+        if not isinstance(t, dict):
+            continue
+        cat = str(t.get("category") or "").strip()
+        how = t.get("how") if isinstance(t.get("how"), list) else lines(t.get("how"))
+        trainers = t.get("trainers") if isinstance(t.get("trainers"), list) else lines(t.get("trainers"))
+        timeline = str(t.get("timeline") or "").strip()
+        outputs = t.get("outputs") if isinstance(t.get("outputs"), list) else lines(t.get("outputs"))
+        if cat or how or trainers or timeline or outputs:
+            clean_training.append({
+                "category": cat,
+                "how": [str(x).strip() for x in how if str(x).strip()],
+                "trainers": [str(x).strip() for x in trainers if str(x).strip()],
+                "timeline": timeline,
+                "outputs": [str(x).strip() for x in outputs if str(x).strip()],
+            })
+    data["training"] = clean_training
+    return data
+
+
 @app.route("/week/<int:n>", methods=["GET", "POST"])
 def week(n):
     if n < 1:
@@ -465,18 +507,7 @@ def week(n):
         action = request.form.get("action") or "save"
 
         if not locked:
-            for key in ("problems_raw", "solutions_raw", "goals_raw"):
-                data[key] = request.form.get(key, "")
-            for key in ("problems", "solutions", "goals", "duties", "new_trainings", "proposed",
-                        "learning_activities", "learning_outcomes"):
-                data[key] = lines(request.form.get(key))
-            acc_text = (request.form.get("accomplishments") or "").replace("\r\n", "\n")
-            data["accomplishments"] = [p.strip() for p in re.split(r"\n\s*\n", acc_text) if p.strip()]
-            try:
-                training = json.loads(request.form.get("training_json") or "[]")
-            except ValueError:
-                training = []
-            data["training"] = [t for t in training if (t.get("category") or "").strip()]
+            _apply_week_fields(data, request.form, is_json=False)
             db.save_week_data(n, data)
             db.add_audit("week", str(n), "Saved weekly report", settings.get("student_name", ""))
         elif action != "download":
@@ -660,6 +691,22 @@ def api_reflection():
                                                    body.get("solutions"), body.get("goals")))
     except ai_helper.AIError as e:
         return jsonify(error=str(e)), 502
+
+
+@app.route("/api/week/<int:n>/autosave", methods=["POST"])
+def api_autosave_week(n):
+    if n < 1:
+        return jsonify(error="Invalid week number."), 404
+    data = db.get_week_data(n)
+    if data.get("status") in ("submitted", "approved"):
+        return jsonify(error=f"Week {n} is locked."), 409
+    body = request.get_json(force=True, silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error="Invalid payload."), 400
+    _apply_week_fields(data, body, is_json=True)
+    db.save_week_data(n, data)
+    saved_at = datetime.now().strftime("%I:%M %p").lstrip("0")
+    return jsonify(ok=True, saved_at=saved_at)
 
 
 @app.route("/api/week/<int:n>/generate", methods=["POST"])
