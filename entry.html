@@ -1,0 +1,186 @@
+{% extends "layout.html" %}
+{% block title %}{{ nice_date(day.date_obj) }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Week {{ week_no }} · Day {{ day.day_number }}{% if day.is_new %} · New entry{% endif %}</p>
+    <h1>{{ nice_date(day.date_obj) }}</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('entry', date_str=prev_date) }}" title="Previous day">←</a>
+    <a class="btn btn-ghost" href="{{ url_for('entry', date_str=next_date) }}" title="Next day">→</a>
+  </div>
+</header>
+
+{% if week_locked %}
+  <div class="notice notice-warn"><strong>Week {{ week_no }} is locked (Submitted/Approved).</strong> Reopen Week {{ week_no }} on the <a href="{{ url_for('week', n=week_no) }}">Weekly Report</a> page with a remark before editing this entry.</div>
+{% endif %}
+{% if before_start %}
+  <div class="notice notice-warn">This date is before your OJT start date ({{ settings.start_date }}). Change the start date in Settings or pick another date.</div>
+{% endif %}
+{% if day.date_obj.weekday() >= 5 %}
+  <div class="notice">This is a {{ day.date_obj.strftime('%A') }}. Your schedule is Monday to Friday, but you can still save it if you reported that day.</div>
+{% endif %}
+{% if validation and validation.warnings %}
+  <div class="notice notice-warn">
+    <strong>Check before submitting:</strong>
+    <ul class="val-list val-warnings compact">{% for w in validation.warnings %}<li>⚠️ {{ w }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+<form id="entry-form" method="post" enctype="multipart/form-data" autocomplete="off">
+  <input type="hidden" name="activities_json" id="activities_json">
+  <input type="hidden" name="after" id="after" value="">
+
+  <section class="card">
+    <div class="card-head"><h2>Date &amp; attendance</h2>
+      <small class="muted">IN/OUT is for the attendance form only. Hours come from your activities.</small></div>
+    <div class="form-grid five attendance-grid">
+      <label>Date<input type="date" name="date" value="{{ day.date }}" required></label>
+      <label>Morning IN<input type="time" name="morning_in" value="{{ day.morning_in }}"></label>
+      <label>Morning OUT<input type="time" name="morning_out" value="{{ day.morning_out }}"></label>
+      <label>Afternoon IN<input type="time" name="afternoon_in" value="{{ day.afternoon_in }}"></label>
+      <label>Afternoon OUT<input type="time" name="afternoon_out" value="{{ day.afternoon_out }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Activities</h2>
+      <div class="head-actions">
+        <button type="button" class="btn btn-ai" id="polish-all">✨ Polish all with AI</button>
+        <button type="button" class="btn btn-ghost" id="add-activity">＋ Add activity</button>
+      </div>
+    </div>
+    <p class="muted small">Write what you did in your own words (Taglish is okay). Put the time you spent on it — only this time is counted in your hours.</p>
+    <div id="activities"></div>
+    <button type="button" class="btn btn-dashed" id="add-activity-2">＋ Add another activity</button>
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><h2>Verified by</h2>
+        <button type="button" class="btn btn-ghost btn-sm" data-add-verifier>＋ Add</button></div>
+      <p class="muted small">Type a keyword (e.g. <strong>luis</strong>, <strong>jerwin</strong>, <strong>it</strong>, <strong>accounting</strong>, <strong>nikki</strong>, <strong>jerry</strong>) — it auto-fills the full name &amp; position. New names are remembered automatically.</p>
+      <div id="verifiers" class="verifier-list">
+        {% for v in day.verifiers %}
+          <div class="verifier-row">
+            <div class="verifier-field">
+              <input name="verifier_name" placeholder="Type name or keyword (e.g. luis, it)" value="{{ v.name }}" autocomplete="off">
+            </div>
+            <input name="verifier_title" placeholder="Position (optional)" value="{{ v.title }}">
+            <button type="button" class="icon-btn" data-remove-row title="Remove">✕</button>
+          </div>
+        {% endfor %}
+      </div>
+      {% if saved_verifiers %}
+        <div class="verifier-chips" id="verifier-chips">
+          {% for sv in saved_verifiers %}
+            <button type="button" class="verifier-chip" data-pick-verifier="{{ sv.name }}" data-pick-title="{{ sv.title }}" title="{{ sv.title or 'No position' }}">＋ {{ sv.name }}</button>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>NCIS attendance screenshot</h2></div>
+      <div class="ncis-list">
+        {% for p in day.ncis %}
+          <figure class="ncis-item">
+            <img src="{{ url_for('uploads', filename=p.filename) }}" alt="NCIS screenshot">
+            <input class="ncis-label-input" name="pcap_{{ p.id }}" value="{{ p.caption }}" placeholder="Date label (default: {{ long_date(day.date_obj) }}, or e.g. November 18–20, 2026)">
+            <label class="check"><input type="checkbox" name="pdel_{{ p.id }}"> Remove</label>
+          </figure>
+        {% endfor %}
+      </div>
+      <label class="small-field">Date label for new screenshot <small>(optional — useful if one screenshot covers multiple days)</small>
+        <input name="ncis_label" placeholder="Default: {{ long_date(day.date_obj) }} (or e.g. November 18–20, 2026)">
+      </label>
+      <label class="file-drop">
+        <input type="file" name="ncis_files" accept="image/*" multiple data-preview="ncis-preview">
+        <span>📷 Upload screenshot</span>
+      </label>
+      <div id="ncis-preview" class="preview-row"></div>
+      <p class="muted small">Days without an NCIS screenshot are skipped automatically if you group multiple days into one image.</p>
+    </section>
+  </div>
+
+  <div class="save-bar">
+    <div class="save-info"><span class="muted">Today's hours</span> <strong id="total-today">{{ fmt_minutes(day.minutes) }}</strong></div>
+    <div class="head-actions">
+      <button type="submit" class="btn btn-ghost only-desktop" data-after="dashboard" {{ 'disabled' if week_locked }}>Save &amp; go to dashboard</button>
+      <button type="submit" class="btn btn-primary" {{ 'disabled' if week_locked }}>💾 Save entry</button>
+    </div>
+  </div>
+</form>
+
+{% if not day.is_new %}
+  <form method="post" action="{{ url_for('delete_entry', date_str=day.date) }}" class="danger-zone"
+        onsubmit="return confirm('Delete this whole entry and its photos? This cannot be undone.');">
+    <button class="btn btn-danger-ghost" type="submit">Delete this entry</button>
+  </form>
+{% endif %}
+
+<template id="activity-template">
+  <div class="activity">
+    <div class="activity-top">
+      <span class="num">1</span>
+      <div class="time-inputs">
+        <label>Start<input type="time" data-f="start"></label>
+        <label>End<input type="time" data-f="end"></label>
+        <label>Minutes<input type="number" min="0" step="1" data-f="minutes" placeholder="0"></label>
+        <span class="duration pill pill-green">0m</span>
+      </div>
+      <button type="button" class="icon-btn" data-remove-activity title="Remove activity">✕</button>
+    </div>
+    <div class="activity-body">
+      <label>What did you do? <small>(your own words)</small>
+        <textarea data-f="raw" rows="2" placeholder="e.g. nag-install ng printer driver sa 2 PC sa accounting"></textarea></label>
+      <div class="ai-row">
+        <button type="button" class="btn btn-ai btn-sm" data-polish>✨ Polish with AI</button>
+        <small class="muted">Makes it formal English for your report.</small>
+      </div>
+      <label>For the report <small>(English, appears in the documents)</small>
+        <textarea data-f="text" rows="2" placeholder="e.g. Installed the printer driver on two computers in the Accounting Office."></textarea></label>
+      <label>Photo caption
+        <input data-f="caption" placeholder="e.g. Installing of printer driver."></label>
+      <div class="photos">
+        <div class="photo-grid" data-existing></div>
+        <div class="photo-buttons">
+          <label class="file-drop small only-phone">
+            <input type="file" accept="image/*" capture="environment" data-photo-input>
+            <span>📷 Take photo</span>
+          </label>
+          <label class="file-drop small">
+            <input type="file" accept="image/*" multiple data-photo-input>
+            <span><span class="only-phone">🖼 Choose photos</span><span class="only-desktop">📷 Add photos for this activity</span></span>
+          </label>
+        </div>
+        <div class="preview-row" data-preview></div>
+      </div>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.ENTRY_ACTIVITIES = [
+    {% for a in day.activities %}
+    {
+      id: {{ a.id }}, start: {{ a.start_time|tojson }}, end: {{ a.end_time|tojson }},
+      minutes: {{ a.minutes or 0 }}, raw: {{ a.raw_text|tojson }}, text: {{ a.text|tojson }},
+      caption: {{ a.caption|tojson }},
+      photos: [
+        {% for p in a.photos %}{ id: {{ p.id }}, url: {{ url_for('uploads', filename=p.filename)|tojson }}, caption: {{ p.caption|tojson }} },{% endfor %}
+      ]
+    },
+    {% endfor %}
+  ];
+  window.ENTRY_LOOSE_PHOTOS = [
+    {% for p in day.loose_photos %}{ id: {{ p.id }}, url: {{ url_for('uploads', filename=p.filename)|tojson }}, caption: {{ p.caption|tojson }} },{% endfor %}
+  ];
+  window.SAVED_VERIFIERS = {{ saved_verifiers|tojson }};
+  initEntryPage();
+</script>
+{% endblock %}

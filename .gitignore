@@ -1,0 +1,16 @@
+# Python virtual environment & caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database (contains API key, phone PIN, secret key) and personal uploads
+data/
+
+# Personal reference documents
+needed files/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

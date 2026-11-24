@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block title %}All Entries{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Timeline</p>
+    <h1>All entries</h1>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('entry_today') }}">＋ New entry</a>
+</header>
+
+<div class="pick-date card">
+  <form onsubmit="event.preventDefault(); if (this.d.value) location.href='/entry/' + this.d.value;">
+    <label>Open or create an entry for any date
+      <span class="inline"><input type="date" name="d" required><button class="btn btn-ghost" type="submit">Open</button></span>
+    </label>
+  </form>
+</div>
+
+{% for w in weeks %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Week {{ w.number }} <small class="muted">{{ range_compact(w.start, w.end) }}</small></h2>
+      <div class="head-actions">
+        <span class="pill pill-green">{{ fmt_minutes(w.minutes) }}</span>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('week', n=w.number) }}">Weekly report →</a>
+      </div>
+    </div>
+    <table class="table days-table">
+      <thead><tr><th>Day</th><th>Date</th><th>Activities</th><th>Photos</th><th>NCIS</th><th>Hours</th><th></th></tr></thead>
+      <tbody>
+        {% for d in w.days %}
+          <tr>
+            <td class="c-day"><span class="day-badge">Day {{ d.day_number }}</span></td>
+            <td class="c-date">{{ nice_date(d.date_obj) }}</td>
+            <td class="acts">
+              {% for a in d.activities[:3] %}<div>• {{ (a.text or a.raw_text)|truncate(80) }}</div>{% endfor %}
+              {% if d.activities|length > 3 %}<small class="muted">+{{ d.activities|length - 3 }} more</small>{% endif %}
+            </td>
+            <td class="c-meta" data-label="Photos">{{ d.photos|length }}</td>
+            <td class="c-meta" data-label="NCIS">{{ '✔' if d.ncis else '—' }}</td>
+            <td class="c-hours"><strong>{{ fmt_minutes(d.minutes) }}</strong></td>
+            <td class="c-edit"><a class="link" href="{{ url_for('entry', date_str=d.date) }}">Edit →</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% else %}
+  <section class="card"><p class="empty">No entries yet.</p></section>
+{% endfor %}
+{% endblock %}

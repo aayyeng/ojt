@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14532d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="OJT Journal">
+  <link rel="manifest" href="{{ url_for('assets', name='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('assets', name='apple-touch-icon.png') }}">
+  <title>OJT Journal</title>
+  <link rel="stylesheet" href="{{ url_for('assets', name='style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-card card">
+    <span class="brand-mark">OJ</span>
+    <h1>OJT Journal</h1>
+    {% if blocked %}
+      <p class="muted">Phone access is turned off.</p>
+      <p class="small muted">On your laptop, open <strong>Settings → Phone access</strong>, set a PIN and turn it on.</p>
+    {% else %}
+      <p class="muted">Enter your PIN to continue.</p>
+      {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+      <form method="post">
+        <input type="password" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+               placeholder="PIN" autofocus required class="pin-input">
+        <button class="btn btn-primary" type="submit">Open</button>
+      </form>
+    {% endif %}
+  </div>
+</body>
+</html>

@@ -1,0 +1,192 @@
+{% extends "layout.html" %}
+{% block title %}Week {{ n }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Weekly report · {{ range_compact(mon, end) }}</p>
+    <h1 class="title-row">Week {{ n }}
+      <span class="pill status-{{ status }}">{{ status_label }}</span>
+    </h1>
+  </div>
+  <div class="head-actions">
+    {% if has_prev %}<a class="btn btn-ghost" href="{{ url_for('week', n=n-1) }}">← Week {{ n-1 }}</a>{% endif %}
+    {% if has_next %}<a class="btn btn-ghost" href="{{ url_for('week', n=n+1) }}">Week {{ n+1 }} →</a>{% endif %}
+  </div>
+</header>
+
+{% if locked %}
+  <div class="notice">
+    <strong>Week {{ n }} is locked ({{ status_label }}).</strong> You can still download the ZIP pack anytime. To edit entries or report text, reopen this week with a remark below.
+  </div>
+{% endif %}
+
+<section class="card validation-card">
+  <div class="card-head">
+    <h2>Pre-flight check</h2>
+    <div class="head-actions">
+      {% if validation.errors %}
+        <span class="pill pill-red">{{ validation.errors|length }} blocking error{{ 's' if validation.errors|length != 1 }}</span>
+      {% elif validation.warnings %}
+        <span class="pill pill-gold">{{ validation.warnings|length }} warning{{ 's' if validation.warnings|length != 1 }}</span>
+      {% else %}
+        <span class="pill pill-green">All clear</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if validation.errors %}
+    <ul class="val-list val-errors">{% for m in validation.errors %}<li>⛔ {{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if validation.warnings %}
+    <ul class="val-list val-warnings">{% for m in validation.warnings %}<li>⚠️ {{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if validation.info %}
+    <ul class="val-list val-info">{% for m in validation.info %}<li>✔ {{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<section class="card workflow-card">
+  <div class="card-head">
+    <h2>Status &amp; sign-off</h2>
+    <span class="pill status-{{ status }}">{{ status_label }}</span>
+  </div>
+  <form method="post" action="{{ url_for('week_status', n=n) }}" class="workflow-bar">
+    {% if not locked %}
+      <input name="remark" placeholder="Optional note (e.g. checked with Sir Jerwin)">
+      {% if status == 'draft' %}
+        <button type="submit" name="status" value="ready" class="btn btn-ghost btn-sm">Mark Ready</button>
+      {% endif %}
+      <button type="submit" name="status" value="submitted" class="btn btn-primary btn-sm" {{ 'disabled' if validation.errors }}>🔒 Submit &amp; Lock</button>
+      <button type="submit" name="status" value="approved" class="btn btn-ghost btn-sm" {{ 'disabled' if validation.errors }}>✅ Mark Approved</button>
+    {% else %}
+      <input name="remark" placeholder="Remark required to reopen (e.g. Supervisor asked to update Friday times)" required>
+      {% if status == 'submitted' %}
+        <button type="submit" name="status" value="approved" class="btn btn-primary btn-sm" formnovalidate>✅ Mark Approved</button>
+      {% endif %}
+      <button type="submit" name="status" value="draft" class="btn btn-danger-ghost btn-sm">🔓 Reopen for edits</button>
+    {% endif %}
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>This week's entries</h2>
+    <div class="head-actions">
+      <span class="pill">{{ days|length }} day{{ 's' if days|length != 1 }}</span>
+      <span class="pill pill-green">{{ fmt_minutes(total) }}</span>
+    </div>
+  </div>
+  {% if days %}
+    <div class="week-days">
+      {% for d in days %}
+        <a class="week-day" href="{{ url_for('entry', date_str=d.date) }}">
+          <div class="wd-head"><strong>{{ d.date_obj.strftime('%A') }}</strong><small>{{ d.date_obj.strftime('%b %d') }} · Day {{ d.day_number }}</small></div>
+          <ul>{% for a in d.activities %}<li>{{ (a.text or a.raw_text)|truncate(90) }}</li>{% endfor %}</ul>
+          <div class="wd-foot"><span>📷 {{ d.photos|length }}</span><span>{{ fmt_minutes(d.minutes) }}</span></div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No entries for this week yet. <a href="{{ url_for('entry', date_str=mon.isoformat()) }}">Add one →</a></p>
+  {% endif %}
+</section>
+
+<form method="post" id="week-form">
+  <input type="hidden" name="training_json" id="training_json">
+
+  <section class="card">
+    <div class="card-head">
+      <h2>1 · Your reflection</h2>
+      <button type="button" class="btn btn-ai" id="polish-reflection">✨ Polish my notes</button>
+    </div>
+    <p class="muted small">Write short notes in your own words (Taglish is okay). These must come from you, so the AI only cleans them up.</p>
+    <div class="grid-3">
+      <label>Problems you encountered<textarea name="problems_raw" rows="4" placeholder="e.g. medyo nalito ako sa format ng inventory">{{ data.problems_raw }}</textarea></label>
+      <label>How you solved them<textarea name="solutions_raw" rows="4" placeholder="e.g. nagtanong ako kay Ma'am at humingi ng sample">{{ data.solutions_raw }}</textarea></label>
+      <label>Goals for next week<textarea name="goals_raw" rows="4" placeholder="e.g. bumilis sa pag-encode">{{ data.goals_raw }}</textarea></label>
+    </div>
+    <div class="grid-3">
+      <label>Problems <small>(final, one per line)</small><textarea name="problems" rows="4">{{ data.problems|join('\n') }}</textarea></label>
+      <label>Solutions <small>(final, one per line)</small><textarea name="solutions" rows="4">{{ data.solutions|join('\n') }}</textarea></label>
+      <label>Goals <small>(final, one per line)</small><textarea name="goals" rows="4">{{ data.goals|join('\n') }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>2 · Report content</h2>
+      <button type="button" class="btn btn-ai" id="generate-week" {{ 'disabled' if not days }}>✨ Generate with AI</button>
+    </div>
+    <p class="muted small">AI writes these from your daily activities. Review and edit before downloading. One item per line.</p>
+    <div class="grid-2">
+      <label>Duties performed this week <small>· Weekly Progress Report</small>
+        <textarea name="duties" rows="7">{{ data.duties|join('\n') }}</textarea></label>
+      <label>New trainings this week <small>· Weekly Progress Report</small>
+        <textarea name="new_trainings" rows="7">{{ data.new_trainings|join('\n') }}</textarea></label>
+      <label>Proposed activities <small>· Weekly Progress Report</small>
+        <textarea name="proposed" rows="6">{{ data.proposed|join('\n') }}</textarea></label>
+      <label>Accomplishments <small>· Weekly Progress Report (separate paragraphs with a blank line)</small>
+        <textarea name="accomplishments" rows="6">{{ data.accomplishments|join('\n\n') }}</textarea></label>
+      <label>Activities <small>· Learning Outcomes</small>
+        <textarea name="learning_activities" rows="6">{{ data.learning_activities|join('\n') }}</textarea></label>
+      <label>Learning outcomes <small>· Learning Outcomes</small>
+        <textarea name="learning_outcomes" rows="6">{{ data.learning_outcomes|join('\n') }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>3 · Training Schedule Form</h2>
+      <button type="button" class="btn btn-ghost" id="add-training">＋ Add category</button>
+    </div>
+    <p class="muted small">Trainers this week: {{ trainers|join(', ') if trainers else 'none yet (add "Verified by" in your entries)' }}</p>
+    <div id="training-list" class="training-list"></div>
+  </section>
+
+  <div class="save-bar">
+    <div class="save-info only-desktop"><span class="muted">Download includes 6 Word files for Week {{ n }}</span></div>
+    <div class="head-actions">
+      <button type="submit" name="action" value="save" class="btn btn-ghost" {{ 'disabled' if locked }}>💾 Save</button>
+      <button type="submit" name="action" value="download" class="btn btn-primary" {{ 'disabled' if validation.errors }}>⬇ Download<span class="only-desktop">&nbsp;WEEK {{ n }} (.zip)</span></button>
+    </div>
+  </div>
+</form>
+
+{% if audit %}
+  <details class="card audit-card">
+    <summary class="audit-summary"><strong>Activity &amp; audit trail</strong> <span class="muted small">({{ audit|length }} event{{ 's' if audit|length != 1 }})</span></summary>
+    <ul class="audit-list">
+      {% for ev in audit %}
+        <li>
+          <span class="audit-time">{{ ev.created_at.replace('T', ' ') }}</span>
+          <strong>{{ ev.action }}</strong>
+          {% if ev.actor %}<span class="muted">by {{ ev.actor }}</span>{% endif %}
+          {% if ev.remark %}<div class="audit-remark">Remark: {{ ev.remark }}</div>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </details>
+{% endif %}
+
+<template id="training-template">
+  <div class="training-card">
+    <div class="tc-top">
+      <input data-t="category" placeholder="Category (e.g. Computer Operation)">
+      <button type="button" class="icon-btn" data-remove-training title="Remove">✕</button>
+    </div>
+    <div class="grid-4">
+      <label>How the activities were performed<textarea data-t="how" rows="4"></textarea></label>
+      <label>Trainer(s)<textarea data-t="trainers" rows="4"></textarea></label>
+      <label>Time line<input data-t="timeline" placeholder="(optional)"></label>
+      <label>Expected output<textarea data-t="outputs" rows="4"></textarea></label>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.WEEK_NO = {{ n }};
+  window.WEEK_TRAINING = {{ data.training|tojson }};
+  initWeekPage();
+</script>
+{% endblock %}

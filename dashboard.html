@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">{{ nice_date(today) }}</p>
+    <h1>Hello, {{ settings.student_name.split(' ')[0] if settings.student_name else 'Intern' }}!</h1>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('entry_today') }}">＋ {{ 'Edit today\'s entry' if today_entry else 'Add today\'s entry' }}</a>
+</header>
+
+{% if today < stats.start %}
+  <div class="notice">Your OJT starts on <strong>{{ long_date(stats.start) }}</strong>
+    ({{ (stats.start - today).days }} day{{ 's' if (stats.start - today).days != 1 }} to go). You can already set up your details in <a href="{{ url_for('settings_page') }}">Settings</a>.</div>
+{% endif %}
+
+<section class="card hero">
+  <div class="hero-main">
+    <p class="label">Hours rendered</p>
+    <p class="big">{{ fmt_minutes(stats.total) }} <span class="of">/ {{ settings.required_hours }}h</span></p>
+    <div class="progress"><span style="width: {{ '%.1f'|format(stats.pct) }}%"></span></div>
+    <p class="muted">{{ '%.1f'|format(stats.pct) }}% complete · {{ fmt_minutes(stats.remaining) }} remaining{% if stats.prior_min %} · includes {{ fmt_minutes(stats.prior_min) }} prior{% endif %}</p>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><span>{{ stats.days|length }}</span><small>Days attended</small></div>
+    <div class="stat"><span>{{ fmt_minutes(stats.avg|int) if stats.avg else '—' }}</span><small>Average per day</small></div>
+    <div class="stat"><span>Week {{ stats.current_week }}</span><small>Current week</small></div>
+    <div class="stat"><span>{{ stats.finish.strftime('%b %d, %Y') if stats.finish and stats.days|length >= 3 else '—' }}</span><small>Estimated finish{{ ' (after 3 days)' if stats.days|length < 3 }}</small></div>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <h2>Weekly reports</h2>
+      <a class="link" href="{{ url_for('days') }}">All entries →</a>
+    </div>
+    {% if weeks %}
+      <ul class="week-list">
+        {% for w in weeks|reverse %}
+          <li>
+            <a href="{{ url_for('week', n=w.number) }}">
+              <strong>Week {{ w.number }}</strong>
+              <small>{{ range_compact(w.start, w.end) }}</small>
+            </a>
+            <span class="pill">{{ w.days|length }} day{{ 's' if w.days|length != 1 }}</span>
+            <span class="pill pill-green">{{ fmt_minutes(w.minutes) }}</span>
+            <span class="pill status-{{ w.status }}">{{ w.status_label }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No entries yet. Your weeks will show up here.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Recent entries</h2></div>
+    {% if recent %}
+      <ul class="recent">
+        {% for d in recent %}
+          <li>
+            <a href="{{ url_for('entry', date_str=d.date) }}">
+              <span class="day-badge">Day {{ d.day_number }}</span>
+              <span class="recent-text">
+                <strong>{{ nice_date(d.date_obj) }}</strong>
+                <small>{{ d.activities|length }} activit{{ 'ies' if d.activities|length != 1 else 'y' }} · {{ d.photos|length }} photo{{ 's' if d.photos|length != 1 }}</small>
+              </span>
+              <span class="pill pill-green">{{ fmt_minutes(d.minutes) }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">Start with your first entry on Day 1. 💪</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

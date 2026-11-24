@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14532d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="OJT Journal">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="{{ url_for('assets', name='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('assets', name='apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('assets', name='icon-192.png') }}">
+  <title>{% block title %}OJT Journal{% endblock %} · OJT Journal</title>
+  <link rel="stylesheet" href="{{ url_for('assets', name='style.css') }}">
+</head>
+<body>
+  {% set ep = request.endpoint %}
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <span class="brand-mark">OJ</span>
+      <span>
+        <strong>OJT Journal</strong>
+        <small>{{ settings.internship_site or 'My OJT' }}</small>
+      </span>
+    </a>
+    <nav>
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep == 'dashboard' }}">
+        <span class="ico">◧</span> Dashboard</a>
+      <a href="{{ url_for('entry_today') }}" class="{{ 'active' if ep in ('entry', 'entry_today') }}">
+        <span class="ico">＋</span> Daily Entry</a>
+      <a href="{{ url_for('days') }}" class="{{ 'active' if ep == 'days' }}">
+        <span class="ico">☰</span> All Entries</a>
+      <a href="{{ url_for('week', n=nav_week|default(1)) }}" class="{{ 'active' if ep == 'week' }}">
+        <span class="ico">▤</span> Weekly Reports</a>
+      <a href="{{ url_for('settings_page') }}" class="{{ 'active' if ep == 'settings_page' }}">
+        <span class="ico">⚙</span> Settings</a>
+    </nav>
+    <div class="sidebar-foot">
+      <small>{{ settings.student_name }}</small>
+      <small class="muted-light">Required: {{ settings.required_hours }} hours</small>
+    </div>
+  </aside>
+
+  <!-- top bar (phone only) -->
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <span class="brand-mark">OJ</span>
+      <strong>OJT Journal</strong>
+    </a>
+    <span class="topbar-name">{{ settings.student_name.split(' ')[0] if settings.student_name }}</span>
+  </header>
+
+  <main class="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for cat, msg in messages %}
+            <div class="flash flash-{{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- bottom tab bar (phone only) -->
+  <nav class="tabbar">
+    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep == 'dashboard' }}">
+      <span class="t-ico">◧</span><span>Home</span></a>
+    <a href="{{ url_for('days') }}" class="{{ 'active' if ep == 'days' }}">
+      <span class="t-ico">☰</span><span>Entries</span></a>
+    <a href="{{ url_for('entry_today') }}" class="tab-add {{ 'active' if ep in ('entry', 'entry_today') }}">
+      <span class="t-ico">＋</span><span>Today</span></a>
+    <a href="{{ url_for('week', n=nav_week|default(1)) }}" class="{{ 'active' if ep == 'week' }}">
+      <span class="t-ico">▤</span><span>Weekly</span></a>
+    <a href="{{ url_for('settings_page') }}" class="{{ 'active' if ep == 'settings_page' }}">
+      <span class="t-ico">⚙</span><span>Settings</span></a>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="{{ url_for('assets', name='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

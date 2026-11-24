@@ -1,0 +1,129 @@
+{% extends "layout.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Setup</p>
+    <h1>Settings</h1>
+  </div>
+</header>
+
+<form method="post" autocomplete="off">
+  <section class="card">
+    <div class="card-head"><h2>My OJT details</h2></div>
+    <div class="form-grid two">
+      <label>Student name<input name="student_name" value="{{ settings.student_name }}" required></label>
+      <label>Internship site<input name="internship_site" value="{{ settings.internship_site }}"></label>
+      <label>OJT start date<input type="date" name="start_date" value="{{ settings.start_date }}" required></label>
+      <label>Required hours<input type="number" step="0.5" min="1" name="required_hours" value="{{ settings.required_hours }}"></label>
+      <label>Hours completed before using this app <small>(optional, e.g. Week 1 total)</small>
+        <input type="number" step="0.5" min="0" name="prior_hours" value="{{ settings.prior_hours or '0' }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Company supervisor</h2>
+      <small class="muted">Used in the certification and "Noted by" parts</small></div>
+    <div class="form-grid two">
+      <label>Full name (with title, e.g. MBA)<input name="supervisor_name" value="{{ settings.supervisor_name }}" placeholder="Jerwin Dominick A. Bernabe"></label>
+      <label>Position<input name="supervisor_title" value="{{ settings.supervisor_title }}" placeholder="IT Supervisor"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Saved verifiers (type-to-fill directory)</h2>
+      <button type="button" class="btn btn-ghost btn-sm" data-add-saved-verifier>＋ Add person</button></div>
+    <p class="muted small">Type any word from the name, position, or shortcut keywords on a Daily Entry and it will automatically fill in the full Name and Position. New people you type on entries are also added here automatically.</p>
+    <div id="saved-verifiers" class="verifier-list">
+      {% for sv in saved_verifiers %}
+        <div class="verifier-row saved-verifier-row">
+          <input name="sv_name" placeholder="Full name" value="{{ sv.name }}">
+          <input name="sv_title" placeholder="Position (optional)" value="{{ sv.title }}">
+          <input name="sv_keywords" placeholder="Keywords (e.g. luis, accounting)" value="{{ sv.keywords }}">
+          <button type="button" class="icon-btn" data-remove-row title="Remove">✕</button>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Default "Verified by"</h2>
+      <button type="button" class="btn btn-ghost btn-sm" data-add-verifier>＋ Add</button></div>
+    <p class="muted small">Optional — leave empty if your verifiers change each day, or add someone who signs almost every day.</p>
+    <div id="verifiers" class="verifier-list">
+      {% for v in verifiers %}
+        <div class="verifier-row">
+          <div class="verifier-field">
+            <input name="verifier_name" placeholder="Type name or keyword" value="{{ v.name }}" autocomplete="off">
+          </div>
+          <input name="verifier_title" placeholder="Position (optional)" value="{{ v.title }}">
+          <button type="button" class="icon-btn" data-remove-row title="Remove">✕</button>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Default attendance time</h2></div>
+    <div class="form-grid four">
+      <label>Morning IN<input type="time" name="default_morning_in" value="{{ settings.default_morning_in }}"></label>
+      <label>Morning OUT<input type="time" name="default_morning_out" value="{{ settings.default_morning_out }}"></label>
+      <label>Afternoon IN<input type="time" name="default_afternoon_in" value="{{ settings.default_afternoon_in }}"></label>
+      <label>Afternoon OUT<input type="time" name="default_afternoon_out" value="{{ settings.default_afternoon_out }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>AI (Groq)</h2>
+      <span class="pill {{ 'pill-green' if settings.groq_api_key else 'pill-gold' }}">{{ 'Key saved' if settings.groq_api_key else 'No key yet' }}</span></div>
+    <p class="muted small">Get a free key at <strong>console.groq.com</strong> → API Keys → Create API Key. It is saved only on this laptop.</p>
+    <div class="form-grid two">
+      <label>Groq API key
+        <input type="password" name="groq_api_key" placeholder="{{ '•••••••• (leave blank to keep the saved key)' if settings.groq_api_key else 'gsk_...' }}"></label>
+      <label>Model
+        <input name="groq_model" value="{{ settings.groq_model }}" list="models">
+        <datalist id="models">
+          <option value="openai/gpt-oss-120b"><option value="openai/gpt-oss-20b"><option value="qwen/qwen3.6-27b">
+        </datalist></label>
+    </div>
+    <div class="ai-row">
+      <button type="button" class="btn btn-ai btn-sm" id="test-ai">Test AI connection</button>
+      {% if settings.groq_api_key %}<label class="check"><input type="checkbox" name="clear_key"> Remove saved key</label>{% endif %}
+      <small class="muted">Save first if you just pasted a new key.</small>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>📱 Phone access</h2>
+      <span class="pill {{ 'pill-green' if settings.phone_access == '1' else '' }}">{{ 'On' if settings.phone_access == '1' else 'Off' }}</span></div>
+    <p class="muted small">Open the system on your iPhone so you can take or pick photos right from your phone.
+      Your phone and laptop must be on the <strong>same WiFi</strong> (or connect the laptop to your iPhone's hotspot).
+      The laptop must be on with this system running.</p>
+    <div class="phone-grid">
+      <div class="form-grid">
+        <label class="check"><input type="checkbox" name="phone_access" {{ 'checked' if settings.phone_access == '1' }}> Allow my phone to open the system</label>
+        <label>PIN for the phone (4–8 digits)
+          <input type="password" name="phone_pin" inputmode="numeric" maxlength="8"
+                 placeholder="{{ '•••• (leave blank to keep the saved PIN)' if settings.phone_pin else 'e.g. 4821' }}"></label>
+        {% if phone_url %}
+          <p class="small">Address for your phone: <strong>{{ phone_url }}</strong></p>
+        {% else %}
+          <p class="small muted">Connect the laptop to WiFi to get the phone address.</p>
+        {% endif %}
+        <p class="small muted">The first time, Windows may ask to allow Python on the network. Tick <strong>Private networks</strong> and click <strong>Allow</strong>.
+          {% if not heic_ok %}If iPhone photos fail to upload, set your iPhone camera to <strong>Most Compatible</strong> (Settings → Camera → Formats).{% endif %}</p>
+      </div>
+      {% if phone_qr and settings.phone_access == '1' %}
+        <figure class="qr"><img src="{{ phone_qr }}" alt="QR code"><figcaption>Scan with your iPhone camera</figcaption></figure>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="save-bar">
+    <a class="btn btn-ghost" href="{{ url_for('backup') }}">⬇ Backup<span class="only-desktop">&nbsp;(data + photos)</span></a>
+    <button type="submit" class="btn btn-primary">💾 Save settings</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}<script>window.SAVED_VERIFIERS = {{ saved_verifiers|tojson }}; initSettingsPage();</script>{% endblock %}
