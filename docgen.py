@@ -656,7 +656,13 @@ def fill_training(doc, wk):
                 tparas.append(make_para(p_trainer))
             tparas.append(make_para(p_trainer, name, bold=True, align="center"))
         set_cell(cells[2], tparas, p_time)
-        set_cell(cells[3], [make_para(p_time, item.get("timeline", ""), bold=False, align="center")])
+        raw_tl = item.get("timeline")
+        if isinstance(raw_tl, list):
+            tl_items = clean_items(raw_tl)
+        else:
+            tl_items = clean_items(str(raw_tl or "").splitlines())
+        tl_paras = [make_para(p_time, tl, bold=False, align="center") for tl in tl_items]
+        set_cell(cells[3], tl_paras, p_time)
         set_cell(cells[4], [make_para(p_out, o) for o in clean_items(item.get("outputs"))], p_time)
         tbl.append(row)
     if not items:

@@ -184,7 +184,36 @@
     <div class="grid-4">
       <label>How the activities were performed<textarea data-t="how" rows="4"></textarea></label>
       <label>Trainer(s)<textarea data-t="trainers" rows="4"></textarea></label>
-      <label>Time line<input data-t="timeline" placeholder="(optional)"></label>
+      <div class="timeline-col">
+        <span class="field-label">Time line <small>(multiple allowed)</small></span>
+        <div class="timeline-list" data-timeline-list></div>
+        <div class="timeline-add">
+          <select data-timeline-pick aria-label="Add timeline choice">
+            <option value="">＋ Pick timeline...</option>
+            <optgroup label="This week">
+              <option value="Week {{ n }}">Week {{ n }}</option>
+              <option value="{{ range_compact(mon, end) }}">{{ range_compact(mon, end) }}</option>
+              {% for d in days %}
+                <option value="{{ long_date(d.date_obj) }}">{{ d.date_obj.strftime('%a') }} · {{ long_date(d.date_obj) }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Duration / Schedule">
+              <option value="Whole day (8:00 AM – 5:00 PM)">Whole day (8:00 AM – 5:00 PM)</option>
+              <option value="Morning (8:00 AM – 12:00 PM)">Morning (8:00 AM – 12:00 PM)</option>
+              <option value="Afternoon (1:00 PM – 5:00 PM)">Afternoon (1:00 PM – 5:00 PM)</option>
+              <option value="1 hour">1 hour</option>
+              <option value="2 hours">2 hours</option>
+              <option value="4 hours">4 hours</option>
+              <option value="1 day">1 day</option>
+              <option value="2 days">2 days</option>
+              <option value="3 days">3 days</option>
+              <option value="1 week">1 week</option>
+              <option value="Ongoing / Weekly">Ongoing / Weekly</option>
+            </optgroup>
+            <option value="__custom__">✎ Custom timeline...</option>
+          </select>
+        </div>
+      </div>
       <label>Expected output<textarea data-t="outputs" rows="4"></textarea></label>
     </div>
   </div>

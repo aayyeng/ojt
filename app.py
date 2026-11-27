@@ -540,7 +540,8 @@ def _apply_week_fields(data, source, is_json=False):
         cat = str(t.get("category") or "").strip()
         how = t.get("how") if isinstance(t.get("how"), list) else lines(t.get("how"))
         trainers = t.get("trainers") if isinstance(t.get("trainers"), list) else lines(t.get("trainers"))
-        timeline = str(t.get("timeline") or "").strip()
+        raw_tl = t.get("timeline")
+        timeline = [str(x).strip() for x in raw_tl if str(x).strip()] if isinstance(raw_tl, list) else lines(raw_tl)
         outputs = t.get("outputs") if isinstance(t.get("outputs"), list) else lines(t.get("outputs"))
         if cat or how or trainers or timeline or outputs:
             clean_training.append({

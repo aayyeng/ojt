@@ -92,7 +92,7 @@ a { color: var(--green-700); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 12px; }
-.grid-4 { display: grid; grid-template-columns: 1.4fr 1fr .8fr 1.2fr; gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: 1.3fr 1fr 1.1fr 1.2fr; gap: 12px; }
 .grid-2 > .card { margin-bottom: 18px; }
 .form-grid { display: grid; gap: 14px; }
 .form-grid.two { grid-template-columns: 1fr 1fr; }
@@ -293,6 +293,15 @@ input[readonly] { background: var(--green-50); }
 .training-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fcfdfc; }
 .tc-top { display: flex; gap: 8px; margin-bottom: 10px; }
 .tc-top input { font-weight: 700; }
+.timeline-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field-label { font-size: 13px; font-weight: 600; color: #39433e; }
+.field-label small { font-weight: 400; color: var(--muted); }
+.timeline-list { display: grid; gap: 6px; }
+.timeline-list:empty { display: none; }
+.timeline-row { display: flex; gap: 4px; align-items: center; }
+.timeline-row input { padding: 7px 9px; font-size: 13.5px; }
+.timeline-row .icon-btn { width: 28px; height: 28px; font-size: 13px; }
+.timeline-add select { padding: 7px 9px; font-size: 13.5px; color: var(--green-800); background: var(--green-50); border-color: #c2dacb; cursor: pointer; }
 .week-fieldset { border: none; padding: 0; margin: 0; min-width: 0; }
 .week-fieldset:disabled { opacity: .82; }
 .autosave-pill {

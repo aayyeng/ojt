@@ -500,7 +500,7 @@ function initWeekPage() {
       category: $('[data-t=category]', c).value.trim(),
       how: splitLines($('[data-t=how]', c).value),
       trainers: splitLines($('[data-t=trainers]', c).value),
-      timeline: $('[data-t=timeline]', c).value.trim(),
+      timeline: $all('[data-t=timeline-item]', c).map((el) => el.value.trim()).filter(Boolean),
       outputs: splitLines($('[data-t=outputs]', c).value),
     }));
   }
@@ -573,13 +573,27 @@ function initWeekPage() {
     } catch (e) { /* ignore */ }
   }
 
+  function addTimelineRow(card, value, focus) {
+    const box = $('[data-timeline-list]', card);
+    if (!box) return;
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    row.innerHTML = '<input data-t="timeline-item" placeholder="e.g. Nov 24, 2026 or 2 hours">' +
+      '<button type="button" class="icon-btn" data-remove-timeline title="Remove timeline">✕</button>';
+    const inp = $('input', row);
+    inp.value = value || '';
+    box.appendChild(row);
+    if (focus) inp.focus();
+  }
+
   function addTraining(t) {
     t = t || {};
     const node = tpl.content.firstElementChild.cloneNode(true);
     $('[data-t=category]', node).value = t.category || '';
     $('[data-t=how]', node).value = (t.how || []).join('\n');
     $('[data-t=trainers]', node).value = (t.trainers || []).join('\n');
-    $('[data-t=timeline]', node).value = t.timeline || '';
+    const timelines = Array.isArray(t.timeline) ? t.timeline : splitLines(t.timeline);
+    timelines.forEach((tl) => addTimelineRow(node, tl, false));
     $('[data-t=outputs]', node).value = (t.outputs || []).join('\n');
     list.appendChild(node);
   }
@@ -592,6 +606,24 @@ function initWeekPage() {
   list.addEventListener('click', (e) => {
     if (e.target.closest('[data-remove-training]')) {
       e.target.closest('.training-card').remove();
+      scheduleAutosave(true);
+      return;
+    }
+    if (e.target.closest('[data-remove-timeline]')) {
+      e.target.closest('.timeline-row').remove();
+      scheduleAutosave(true);
+    }
+  });
+  list.addEventListener('change', (e) => {
+    const pick = e.target.closest('[data-timeline-pick]');
+    if (!pick || !pick.value) return;
+    const card = pick.closest('.training-card');
+    const val = pick.value;
+    pick.value = '';
+    if (val === '__custom__') {
+      addTimelineRow(card, '', true);
+    } else {
+      addTimelineRow(card, val, false);
       scheduleAutosave(true);
     }
   });
