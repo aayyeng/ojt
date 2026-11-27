@@ -51,6 +51,7 @@ IS_CLOUD = bool(
 )
 
 app = Flask(__name__, template_folder=BASE_DIR, static_folder=None)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
 app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 30
 app.config["SESSION_COOKIE_HTTPONLY"] = True
