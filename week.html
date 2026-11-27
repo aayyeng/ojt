@@ -183,7 +183,36 @@
     </div>
     <div class="grid-4">
       <label>How the activities were performed<textarea data-t="how" rows="4"></textarea></label>
-      <label>Trainer(s)<textarea data-t="trainers" rows="4"></textarea></label>
+      <div class="timeline-col">
+        <span class="field-label">Trainer(s) <small>(multiple allowed)</small></span>
+        <div class="timeline-list" data-trainer-list></div>
+        <div class="timeline-add">
+          <select data-trainer-pick aria-label="Add trainer">
+            <option value="">＋ Pick trainer...</option>
+            {% if trainers %}
+              <optgroup label="This week's verifiers">
+                {% for name in trainers %}
+                  <option value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% set other_verifiers = [] %}
+            {% for sv in saved_verifiers %}
+              {% if sv.name not in trainers %}
+                {% set _ = other_verifiers.append(sv) %}
+              {% endif %}
+            {% endfor %}
+            {% if other_verifiers %}
+              <optgroup label="Saved verifiers">
+                {% for sv in other_verifiers %}
+                  <option value="{{ sv.name }}">{{ sv.name }}{% if sv.title %} ({{ sv.title }}){% endif %}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            <option value="__custom__">✎ Custom trainer...</option>
+          </select>
+        </div>
+      </div>
       <div class="timeline-col">
         <span class="field-label">Time line <small>(multiple allowed)</small></span>
         <div class="timeline-list" data-timeline-list></div>

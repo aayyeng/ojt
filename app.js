@@ -499,7 +499,7 @@ function initWeekPage() {
     return $all('.training-card', list).map((c) => ({
       category: $('[data-t=category]', c).value.trim(),
       how: splitLines($('[data-t=how]', c).value),
-      trainers: splitLines($('[data-t=trainers]', c).value),
+      trainers: $all('[data-t=trainer-item]', c).map((el) => el.value.trim()).filter(Boolean),
       timeline: $all('[data-t=timeline-item]', c).map((el) => el.value.trim()).filter(Boolean),
       outputs: splitLines($('[data-t=outputs]', c).value),
     }));
@@ -573,6 +573,25 @@ function initWeekPage() {
     } catch (e) { /* ignore */ }
   }
 
+  function addTrainerRow(card, value, focus) {
+    const box = $('[data-trainer-list]', card);
+    if (!box) return;
+    if (value) {
+      const exists = $all('[data-t=trainer-item]', box).some(
+        (el) => el.value.trim().toLowerCase() === value.trim().toLowerCase()
+      );
+      if (exists) return;
+    }
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    row.innerHTML = '<input data-t="trainer-item" placeholder="Trainer full name">' +
+      '<button type="button" class="icon-btn" data-remove-trainer title="Remove trainer">✕</button>';
+    const inp = $('input', row);
+    inp.value = value || '';
+    box.appendChild(row);
+    if (focus) inp.focus();
+  }
+
   function addTimelineRow(card, value, focus) {
     const box = $('[data-timeline-list]', card);
     if (!box) return;
@@ -591,7 +610,8 @@ function initWeekPage() {
     const node = tpl.content.firstElementChild.cloneNode(true);
     $('[data-t=category]', node).value = t.category || '';
     $('[data-t=how]', node).value = (t.how || []).join('\n');
-    $('[data-t=trainers]', node).value = (t.trainers || []).join('\n');
+    const trainers = Array.isArray(t.trainers) ? t.trainers : splitLines(t.trainers);
+    trainers.forEach((tr) => addTrainerRow(node, tr, false));
     const timelines = Array.isArray(t.timeline) ? t.timeline : splitLines(t.timeline);
     timelines.forEach((tl) => addTimelineRow(node, tl, false));
     $('[data-t=outputs]', node).value = (t.outputs || []).join('\n');
@@ -609,12 +629,30 @@ function initWeekPage() {
       scheduleAutosave(true);
       return;
     }
+    if (e.target.closest('[data-remove-trainer]')) {
+      e.target.closest('.timeline-row').remove();
+      scheduleAutosave(true);
+      return;
+    }
     if (e.target.closest('[data-remove-timeline]')) {
       e.target.closest('.timeline-row').remove();
       scheduleAutosave(true);
     }
   });
   list.addEventListener('change', (e) => {
+    const tpick = e.target.closest('[data-trainer-pick]');
+    if (tpick && tpick.value) {
+      const card = tpick.closest('.training-card');
+      const val = tpick.value;
+      tpick.value = '';
+      if (val === '__custom__') {
+        addTrainerRow(card, '', true);
+      } else {
+        addTrainerRow(card, val, false);
+        scheduleAutosave(true);
+      }
+      return;
+    }
     const pick = e.target.closest('[data-timeline-pick]');
     if (!pick || !pick.value) return;
     const card = pick.closest('.training-card');

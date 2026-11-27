@@ -606,6 +606,7 @@ def week(n):
                            status=status, status_label=rules.WEEK_STATUS_LABELS.get(status, "Draft"),
                            locked=locked, audit=db.list_audit("week", str(n)),
                            total=total, trainers=week_trainers(days_in_week),
+                           saved_verifiers=db.saved_verifiers(settings),
                            has_prev=n > 1, has_next=n < max(last_week, progress_stats()["current_week"]))
 
 

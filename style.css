@@ -92,7 +92,7 @@ a { color: var(--green-700); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 12px; }
-.grid-4 { display: grid; grid-template-columns: 1.3fr 1fr 1.1fr 1.2fr; gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: 1.3fr 1.05fr 1.05fr 1.2fr; gap: 12px; }
 .grid-2 > .card { margin-bottom: 18px; }
 .form-grid { display: grid; gap: 14px; }
 .form-grid.two { grid-template-columns: 1fr 1fr; }
