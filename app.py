@@ -652,13 +652,22 @@ def settings_page():
         names = request.form.getlist("verifier_name")
         titles = request.form.getlist("verifier_title")
         verifiers = [{"name": a.strip(), "title": b.strip()} for a, b in zip(names, titles) if a.strip()]
+        sv_origs = request.form.getlist("sv_orig_name")
         sv_names = request.form.getlist("sv_name")
         sv_titles = request.form.getlist("sv_title")
         sv_keywords = request.form.getlist("sv_keywords")
-        saved_list = [
-            {"name": a.strip(), "title": b.strip(), "keywords": c.strip()}
-            for a, b, c in zip(sv_names, sv_titles, sv_keywords) if a.strip()
-        ]
+        if len(sv_origs) < len(sv_names):
+            sv_origs += [""] * (len(sv_names) - len(sv_origs))
+        saved_list = []
+        renames = {}
+        for orig, a, b, c in zip(sv_origs, sv_names, sv_titles, sv_keywords):
+            name = a.strip()
+            if not name:
+                continue
+            item = {"name": name, "title": b.strip(), "keywords": c.strip()}
+            saved_list.append(item)
+            if orig.strip() and orig.strip().lower() != name.lower():
+                renames[orig.strip()] = item
         values = {k: request.form.get(k, "").strip() for k in (
             "student_name", "internship_site", "start_date", "required_hours", "prior_hours",
             "supervisor_name", "supervisor_title", "groq_model",
@@ -692,7 +701,16 @@ def settings_page():
         if request.form.get("clear_key"):
             values["groq_api_key"] = ""
         db.save_settings(values)
-        flash("Settings saved.", "success")
+        upd_days, upd_weeks = db.sync_verifiers_from_settings(saved_list, renames)
+        if upd_days or upd_weeks:
+            parts = []
+            if upd_days:
+                parts.append(f"{upd_days} daily entr{'ies' if upd_days != 1 else 'y'}")
+            if upd_weeks:
+                parts.append(f"{upd_weeks} weekly report{'s' if upd_weeks != 1 else ''}")
+            flash(f"Settings saved and synced to {' and '.join(parts)}.", "success")
+        else:
+            flash("Settings saved.", "success")
         return redirect(url_for("settings_page"))
     ip = lan_ip()
     phone_url = f"http://{ip}:{PORT}" if ip else None

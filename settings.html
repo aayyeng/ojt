@@ -37,6 +37,7 @@
     <div id="saved-verifiers" class="verifier-list">
       {% for sv in saved_verifiers %}
         <div class="verifier-row saved-verifier-row">
+          <input type="hidden" name="sv_orig_name" value="{{ sv.name }}">
           <input name="sv_name" placeholder="Full name" value="{{ sv.name }}">
           <input name="sv_title" placeholder="Position (optional)" value="{{ sv.title }}">
           <input name="sv_keywords" placeholder="Keywords (e.g. luis, accounting)" value="{{ sv.keywords }}">

@@ -746,12 +746,13 @@ function initSettingsPage() {
     $all('[data-add-saved-verifier]').forEach((btn) => btn.addEventListener('click', () => {
       const row = document.createElement('div');
       row.className = 'verifier-row saved-verifier-row';
-      row.innerHTML = '<input name="sv_name" placeholder="Full name">' +
+      row.innerHTML = '<input type="hidden" name="sv_orig_name" value="">' +
+        '<input name="sv_name" placeholder="Full name">' +
         '<input name="sv_title" placeholder="Position (optional)">' +
         '<input name="sv_keywords" placeholder="Keywords (e.g. luis, accounting)">' +
         '<button type="button" class="icon-btn" data-remove-row title="Remove">✕</button>';
       svList.appendChild(row);
-      row.querySelector('input').focus();
+      $('input[name=sv_name]', row).focus();
     }));
     svList.addEventListener('click', (e) => {
       if (e.target.matches('[data-remove-row]')) e.target.closest('.verifier-row').remove();

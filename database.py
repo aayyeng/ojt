@@ -244,6 +244,80 @@ def remember_verifiers(verifiers):
         save_settings({"saved_verifiers": json.dumps(current)})
 
 
+def sync_verifiers_from_settings(saved_list, renames=None):
+    """Propagate Saved Verifiers name/title updates to all saved daily entries and weekly training schedules."""
+    lookup = {}
+    for sv in saved_list or []:
+        name = (sv.get("name") or "").strip()
+        if not name:
+            continue
+        entry = {"name": name, "title": (sv.get("title") or "").strip()}
+        lookup[name.lower()] = entry
+    for old_name, new_entry in (renames or {}).items():
+        if old_name and new_entry and new_entry.get("name"):
+            lookup[old_name.strip().lower()] = {
+                "name": new_entry["name"].strip(),
+                "title": (new_entry.get("title") or "").strip(),
+            }
+    if not lookup:
+        return 0, 0
+
+    updated_days = 0
+    updated_weeks = 0
+    with connect() as conn:
+        for row in conn.execute("SELECT id, verifiers FROM days").fetchall():
+            try:
+                vers = json.loads(row["verifiers"] or "[]")
+            except ValueError:
+                continue
+            changed = False
+            new_vers = []
+            for v in vers:
+                if not isinstance(v, dict):
+                    continue
+                vname = (v.get("name") or "").strip()
+                vtitle = (v.get("title") or "").strip()
+                match = lookup.get(vname.lower())
+                if match and (match["name"] != vname or match["title"] != vtitle):
+                    new_vers.append({"name": match["name"], "title": match["title"]})
+                    changed = True
+                else:
+                    new_vers.append({"name": vname, "title": vtitle})
+            if changed:
+                conn.execute("UPDATE days SET verifiers = ? WHERE id = ?", (json.dumps(new_vers), row["id"]))
+                updated_days += 1
+
+        for row in conn.execute("SELECT number, data FROM weeks").fetchall():
+            try:
+                wdata = json.loads(row["data"] or "{}")
+            except ValueError:
+                continue
+            training = wdata.get("training")
+            if not isinstance(training, list):
+                continue
+            changed = False
+            for t in training:
+                if not isinstance(t, dict) or not isinstance(t.get("trainers"), list):
+                    continue
+                new_trainers = []
+                for tr in t["trainers"]:
+                    tname = str(tr or "").strip()
+                    match = lookup.get(tname.lower())
+                    if match and match["name"] != tname:
+                        new_trainers.append(match["name"])
+                        changed = True
+                    else:
+                        new_trainers.append(tname)
+                t["trainers"] = new_trainers
+            if changed:
+                conn.execute("UPDATE weeks SET data = ? WHERE number = ?", (json.dumps(wdata), row["number"]))
+                updated_weeks += 1
+
+        if updated_days or updated_weeks:
+            touch_modified(conn)
+    return updated_days, updated_weeks
+
+
 # --------------------------------------------------------------------------
 # Date helpers
 # --------------------------------------------------------------------------
