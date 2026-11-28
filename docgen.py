@@ -385,25 +385,89 @@ def _format_underlined_pair(p, left_text, right_text, left_end, right_start, rig
     p.append(_run("\u00a0", underline=True, tab=True))
 
 
+def _week_signatories(wk):
+    """Collect unique employees from the week's 'Verified by' entries (fallback to supervisor if none)."""
+    seen = {}
+    out = []
+    for day in wk.get("days") or []:
+        for v in day.get("verifiers") or []:
+            name = (v.get("name") or "").strip()
+            title = (v.get("title") or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                if title and not seen[key]["title"]:
+                    seen[key]["title"] = title
+            else:
+                entry = {"name": name, "title": title}
+                seen[key] = entry
+                out.append(entry)
+    if not out:
+        sup = (wk.get("supervisor_name") or "").strip()
+        if sup:
+            out.append({"name": sup, "title": (wk.get("supervisor_title") or "").strip()})
+    return out
+
+
+def _set_table_no_borders(table):
+    tblPr = table._tbl.tblPr
+    for old in tblPr.findall(qn("w:tblBorders")):
+        tblPr.remove(old)
+    borders = OxmlElement("w:tblBorders")
+    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        b = OxmlElement(f"w:{side}")
+        b.set(qn("w:val"), "none")
+        b.set(qn("w:sz"), "0")
+        b.set(qn("w:space"), "0")
+        b.set(qn("w:color"), "auto")
+        borders.append(b)
+    tblPr.append(borders)
+
+
 def fill_daily(doc, wk):
     # Ensure Student Name / Internship Site and Signature / Date lines never wrap awkwardly
     children = _body_children(doc)
     site = (wk.get("site") or "").strip()
     site_size = 10.0 if len(site) > 40 else (10.5 if len(site) > 30 else None)
-    sup = (wk.get("supervisor_name") or "").strip().upper()
-    sup_size = 10.5 if len(sup) > 28 else None
     student = (wk.get("student_name") or "").strip().upper()
     certdate = short_date(wk["end"])
 
     if len(children) > 5 and children[4].tag == qn("w:p") and children[5].tag == qn("w:p"):
         _format_label_pair(children[4], "Student Name:", "Internship Site:", 4200)
         _format_underlined_pair(children[5], student, site, 3800, 4200, 9450, right_size=site_size)
+
+    # Rebuild certification signature blocks using the week's unique verifiers + student intern
     if len(children) > 15 and children[14].tag == qn("w:p") and children[15].tag == qn("w:p"):
-        _format_underlined_pair(children[14], sup, certdate, 5200, 6200, 9000, left_size=sup_size)
-        _format_label_pair(children[15], "Company Supervisor\u2019s Signature", "Date", 7600, right_align="center")
-    if len(children) > 19 and children[18].tag == qn("w:p") and children[19].tag == qn("w:p"):
-        _format_underlined_pair(children[18], student, certdate, 5200, 6200, 9000)
-        _format_label_pair(children[19], "Student Intern\u2019s Signature", "Date", 7600, right_align="center")
+        p_blank = copy.deepcopy(children[12]) if len(children) > 12 else OxmlElement("w:p")
+        p_sig_proto = copy.deepcopy(children[14])
+        p_lbl_proto = copy.deepcopy(children[15])
+        _remove_after(doc, 12)
+
+        signatories = _week_signatories(wk)
+        gap_lines = 1 if len(signatories) >= 3 else 2
+
+        for sig in signatories:
+            for _ in range(gap_lines):
+                _append_body(doc, copy.deepcopy(p_blank))
+            sig_name = sig["name"].upper()
+            sig_size = 10.5 if len(sig_name) > 28 else None
+            p_line = copy.deepcopy(p_sig_proto)
+            _format_underlined_pair(p_line, sig_name, certdate, 5200, 6200, 9000, left_size=sig_size)
+            _append_body(doc, p_line)
+            role_label = f"{sig['title']}\u2019s Signature" if sig.get("title") else "Company Supervisor\u2019s Signature"
+            p_lbl = copy.deepcopy(p_lbl_proto)
+            _format_label_pair(p_lbl, role_label, "Date", 7600, right_align="center")
+            _append_body(doc, p_lbl)
+
+        for _ in range(gap_lines):
+            _append_body(doc, copy.deepcopy(p_blank))
+        p_stu = copy.deepcopy(p_sig_proto)
+        _format_underlined_pair(p_stu, student, certdate, 5200, 6200, 9000)
+        _append_body(doc, p_stu)
+        p_stu_lbl = copy.deepcopy(p_lbl_proto)
+        _format_label_pair(p_stu_lbl, "Student Intern\u2019s Signature", "Date", 7600, right_align="center")
+        _append_body(doc, p_stu_lbl)
 
     tbl = doc.element.body.find(qn("w:tbl"))
     rows = tbl.findall(qn("w:tr"))
@@ -707,6 +771,52 @@ def fill_weekly(doc, wk):
     _question_cell(rows[5].findall(qn("w:tc"))[0], wk["problems"], fallback_bullet)
     _question_cell(rows[6].findall(qn("w:tc"))[0], wk["solutions"], fallback_bullet)
     _question_cell(rows[7].findall(qn("w:tc"))[0], wk["goals"], fallback_bullet)
+
+    # Rebuild "Noted by:" signatories as a clean multi-column table of the week's employees
+    children = _body_children(doc)
+    if len(children) > 14:
+        _remove_after(doc, 14)
+        signatories = _week_signatories(wk)
+        if signatories:
+            cols = min(len(signatories), 3)
+            chunks = [signatories[i:i + cols] for i in range(0, len(signatories), cols)]
+            total_rows = 2 * len(chunks) + max(0, len(chunks) - 1)
+            sig_tbl = doc.add_table(rows=total_rows, cols=cols)
+            _set_table_no_borders(sig_tbl)
+            col_w = DOC_TABLE_WIDTH // cols
+            for row in sig_tbl.rows:
+                for cell in row.cells:
+                    cell.width = Inches(col_w / 1440)
+            r_cursor = 0
+            for ci, chunk in enumerate(chunks):
+                if ci > 0:
+                    spacer = sig_tbl.rows[r_cursor]
+                    _cant_split(spacer)
+                    for k in range(cols):
+                        p = spacer.cells[k].paragraphs[0]
+                        _fmt_para(p)
+                        p.add_run(" ")
+                    r_cursor += 1
+                name_row = sig_tbl.rows[r_cursor]
+                title_row = sig_tbl.rows[r_cursor + 1]
+                _cant_split(name_row)
+                _cant_split(title_row)
+                for k in range(cols):
+                    p_n = name_row.cells[k].paragraphs[0]
+                    p_t = title_row.cells[k].paragraphs[0]
+                    _fmt_para(p_n, keep_next=True)
+                    _fmt_para(p_t)
+                    if k >= len(chunk):
+                        continue
+                    rn = p_n.add_run(chunk[k]["name"])
+                    rn.bold = True
+                    rn.font.name = "Arial"
+                    rn.font.size = Pt(12)
+                    if chunk[k].get("title"):
+                        rt = p_t.add_run(chunk[k]["title"])
+                        rt.font.name = "Arial"
+                        rt.font.size = Pt(12)
+                r_cursor += 2
 
 
 # --------------------------------------------------------------------------

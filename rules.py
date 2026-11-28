@@ -193,8 +193,6 @@ def validate_week(days, week_data, settings):
         errors.append("Student name is blank in Settings.")
     if not (settings.get("internship_site") or "").strip():
         warnings.append("Internship site is blank in Settings.")
-    if not (settings.get("supervisor_name") or "").strip():
-        warnings.append("Company supervisor name is blank in Settings (certification & 'Noted by' will be empty).")
 
     missing_times = []
     missing_verifiers = []
